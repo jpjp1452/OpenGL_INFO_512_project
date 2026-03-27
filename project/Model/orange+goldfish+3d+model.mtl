@@ -1,0 +1,13 @@
+# MTL file - created by a modified js OBJExporter
+
+newmtl tripo_mat_508376d6-8b56-46fb-82de-1c51f38d0aea
+Tr 0.0000
+Tf 1.0000 1.0000 1.0000
+illum 1
+Pr 0.8999999761581421
+Pds 1
+Pl 1
+Ka 1 1 1
+Kd 1 1 1
+Ke 0 0 0
+map_Kd tripo_mat_508376d6-8b56-46fb-82de-1c51f38d0aea.png
