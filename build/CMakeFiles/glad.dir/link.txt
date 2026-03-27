@@ -1,2 +1,0 @@
-/usr/bin/llvm-ar qc libglad.a CMakeFiles/glad.dir/3rdParty/glad/src/glad.c.o
-/usr/bin/llvm-ranlib libglad.a
