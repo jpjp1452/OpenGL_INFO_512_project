@@ -4,6 +4,7 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include <glm/gtc/noise.hpp>  
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -25,12 +26,26 @@
 #define PATH_TO_SHADERS "shaders"
 #endif
 
-const int WIDTH = 800;
-const int HEIGHT = 600;
+#ifndef STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#endif
+
+#ifndef STB_IMAGE_WRITE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+#endif
+
+
+const int SCREEN_WIDTH = 800;
+const int SCREEN_HEIGHT = 600;
+
+#include "terrainManager.h"
 
 #define MouvementMultiplier 0.6f
 #define RotationMultiplier 1.9f
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+
 
 void processInput(GLFWwindow *window)
 {
@@ -87,7 +102,40 @@ glm::mat4 rotateAtoB(glm::vec3 a, glm::vec3 b,glm::vec3 up = glm::vec3(0.0f, 1.0
 
 
 int main()
-{
+{  
+
+/*
+    int maxY = 512;
+    int maxX = 512;
+    unsigned char *dataC = new unsigned char[maxX * maxY*3];
+    for (int y = 0; y < maxY; y++)
+    {
+        for (int x = 0; x < maxX; x++)
+        {
+            float value = glm::perlin(glm::vec2(x, y) * 0.01f);
+            unsigned colorValue = (value + 1.0f) * (127.5f*3);
+            dataC[(y * maxX + x) * 3 + 0] = (colorValue > 255) ? 255 : colorValue;
+            colorValue -= dataC[(y * maxX + x) * 3 + 0];
+            dataC[(y * maxX + x) * 3 + 1] = (colorValue > 255) ? 255 : colorValue;
+            colorValue -= dataC[(y * maxX + x) * 3 + 1];
+            dataC[(y * maxX + x) * 3 + 2] = (colorValue > 255) ? 255 : colorValue;
+        }
+    }
+    // Save the image with stb_image_write
+    stbi_write_png("perlin_noise.png", maxX, maxY, 3, dataC, maxX*3);
+    delete[] dataC;
+    exit(0);
+*/
+
+
+
+
+
+
+
+
+
+
     std::cout << "Initializing OpenGL Application..." << std::endl;
 
     // Initialize GLFW
@@ -97,11 +145,11 @@ int main()
         return -1;
     }
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     // Create window
-    GLFWwindow *window = glfwCreateWindow(WIDTH, HEIGHT, "OpenGL Project", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "OpenGL Project", nullptr, nullptr);
     if (window == nullptr)
     {
         std::cerr << "Failed to create GLFW window" << std::endl;
@@ -124,16 +172,48 @@ int main()
     std::cout << "GLSL Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 
     glEnable(GL_DEPTH_TEST);
-    glViewport(0, 0, WIDTH, HEIGHT);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
 
     std::cout << "Loading model..." << std::endl;
     ObjectManager objectManager;
-    Shader textureShader(PATH_TO_SHADERS "/texture.vert", PATH_TO_SHADERS "/texture.frag");
+    //Shader textureLightingShader(PATH_TO_SHADERS "/textureLighting.vert", PATH_TO_SHADERS "/textureLighting.frag");
+    
+    ShaderFilePaths shaderPaths;
+    shaderPaths.addFragmentShader(PATH_TO_SHADERS "/textureLighting.frag");
+    shaderPaths.addVertexShader(PATH_TO_SHADERS "/textureLighting.vert");
+    Shader textureLightingShader(shaderPaths);
 
+
+    textureLightingShader.use();
+    textureLightingShader.setFloat("shininess", 32.0f);
+    textureLightingShader.setFloat("light.ambient_strength", 0.1f);
+    textureLightingShader.setFloat("light.diffuse_strength", 1.8f);
+    textureLightingShader.setFloat("light.specular_strength", 1.0f);
+    textureLightingShader.setFloat("light.constant", 1.0f);
+    textureLightingShader.setFloat("light.linear", 0.14f);
+    textureLightingShader.setFloat("light.quadratic", 0.07f);
+    textureLightingShader.setVector3f("light.light_pos", glm::vec3(0.0f, 0.0f, 0.0f));
+
+    Shader textureShader(PATH_TO_SHADERS "/texture.vert", PATH_TO_SHADERS "/texture.frag");
 
 
     Shader sphereShader(PATH_TO_SHADERS "/sphere.vert", PATH_TO_SHADERS "/sphere.frag");
     objectManager.addObject("sphere", PATH_TO_OBJECTS "/sphere.obj", sphereShader);
+
+    // Create terrain shader with tessellation
+    ShaderFilePaths terrainShaderPaths;
+    terrainShaderPaths.addVertexShader(PATH_TO_SHADERS "/terrain.vert");
+    terrainShaderPaths.addTessellationControlShader(PATH_TO_SHADERS "/terrain.tcs");
+    terrainShaderPaths.addTessellationEvaluationShader(PATH_TO_SHADERS "/terrain.tes");
+    terrainShaderPaths.addFragmentShader(PATH_TO_SHADERS "/terrain.frag");
+    Shader terrainShader(terrainShaderPaths);
+    terrainManager terrain(terrainShader);
 
 
 
@@ -146,7 +226,7 @@ int main()
 
     for (size_t i = 0; i < numModelsTogenerate; i++)
     {
-        objectManager.addObject("fish", PATH_TO_OBJECTS "/Untitled.obj", textureShader);
+        objectManager.addObject("fish", PATH_TO_OBJECTS "/Untitled.obj", textureLightingShader);
         ObjectsData &data = objectManager.objects.at("fish");
         // Random translation
         float tx = ((rand() / (float)RAND_MAX) - 0.5f) * 2.0f * maxTranslation;
@@ -166,34 +246,7 @@ int main()
     }
 
     ObjectsData &data = objectManager.objects.at("fish");
-    float minX = std::numeric_limits<float>::max();
-    float maxX = std::numeric_limits<float>::lowest();
-    float minY = std::numeric_limits<float>::max();
-    float maxY = std::numeric_limits<float>::lowest();
-    float minZ = std::numeric_limits<float>::max();
-    float maxZ = std::numeric_limits<float>::lowest();
-
-    for(size_t i = 0; i < data.object.positions.size(); i++)
-    {
-        glm::vec4 pos = glm::vec4(data.object.positions[i], 1.0f);
-        pos = data.modelMatrices[0] * pos;
-        minX = std::min(minX, pos.x);
-        maxX = std::max(maxX, pos.x);
-        minY = std::min(minY, pos.y);
-        maxY = std::max(maxY, pos.y);
-        minZ = std::min(minZ, pos.z);
-        maxZ = std::max(maxZ, pos.z);
-    }
-
-
-
     
-
-    std::cout << "Model bounding box:" << std::endl;
-    std::cout << "X: [" << minX << ", " << maxX << "]" << std::endl;
-    std::cout << "Y: [" << minY << ", " << maxY << "]" << std::endl;
-    std::cout << "Z: [" << minZ << ", " << maxZ << "]" << std::endl;
-
 
 
     // Set the center as camera position
@@ -260,7 +313,7 @@ int main()
     std::cout << "Controls: W/A/S/D to move, Arrow keys to rotate, ESC to quit" << std::endl;
 
     glm::mat4 model = glm::mat4(1.0f);
-
+    
     double prev = glfwGetTime();
     double prevUpdate = prev;
     int deltaFrame = 0;
@@ -269,7 +322,7 @@ int main()
         double deltaTime = now - prev;
         double timeSinceLastUpdate = now - prevUpdate;
         deltaFrame++;
-        if (timeSinceLastUpdate > 0.5)
+        if (timeSinceLastUpdate > 1.0)
         {
             prevUpdate = now;
             prev = now;
@@ -278,8 +331,7 @@ int main()
             std::cout << "\rFPS: " << fpsCount << std::flush;
         }
     };
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     double lastTime = glfwGetTime();
     double now = lastTime;
     while (!glfwWindowShouldClose(window))
@@ -294,7 +346,7 @@ int main()
         shader.use();
 
         glm::mat4 view = camera.GetViewMatrix();
-        glm::mat4 projection = camera.GetProjectionMatrix(camera.Zoom, (float)WIDTH / (float)HEIGHT);
+        glm::mat4 projection = camera.GetProjectionMatrix(camera.Zoom, (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT);
 
         shader.setMatrix4("M", model);
         shader.setMatrix4("V", view);
@@ -305,12 +357,16 @@ int main()
         glDrawArrays(GL_TRIANGLES, 0, 3);
         lastTime = now;
         now = glfwGetTime();
+
+
+
+
         uniformSetters setters;
         setters.setFloats.push_back({"time", now});
         setters.setMat4.push_back({"V", view});
         setters.setMat4.push_back({"P", projection});
         setters.setVec3.push_back({"u_view_pos", camera.Position});
-
+        
         uniformSetters sphereSetters;
         //base color is blue
         sphereSetters.setVec3.push_back({"baseColor", glm::vec3(0.01f, 0.08f, 0.88f)});
@@ -321,11 +377,11 @@ int main()
         sphereSetters.setVec3.push_back({"view_pos", camera.Position});
 
 
+        
         boidManager.center = camera.Position;
- 
-        boidManager.update((now - lastTime)*1.0f);
+        //boidManager.update((now - lastTime)*1.0f);
 
-
+        
 
         //boidManager.update((now - lastTime)*1.0f);
         ObjectsData &data = objectManager.objects.at("fish");
@@ -344,6 +400,22 @@ int main()
         glDepthMask(GL_FALSE);
         objectManager.drawObject("sphere", sphereSetters);
         glDepthMask(GL_TRUE);
+
+        // Draw terrain
+        terrainShader.use();
+        glm::mat4 terrainModel = glm::scale(glm::mat4(1.0f), glm::vec3(50.0f, 50.0f, 50.0f));
+        terrainModel = terrainModel;
+        terrainShader.setMatrix4("M", terrainModel);
+        terrainShader.setMatrix4("V", view);
+        terrainShader.setMatrix4("P", projection);
+        terrainShader.setVector3f("u_view_pos", camera.Position);
+        terrainShader.setVector3f("lightPos", camera.Position + glm::vec3(0.0f, 10.0f, 0.0f));
+        terrainShader.setInteger("heightMap", 0);
+        terrainShader.setInteger("textureBrickColor", 1);
+        terrainShader.setInteger("textureBrickBump", 2);
+        glPatchParameteri(GL_PATCH_VERTICES, 4);
+        terrain.draw();
+
         fps(now);
         glfwSwapBuffers(window);
         glfwPollEvents();

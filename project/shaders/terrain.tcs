@@ -1,0 +1,43 @@
+#version 400 core
+
+layout(vertices = 4) out;
+
+in VS_OUT {
+    vec3 pos;
+    vec2 texCoord;
+} tcs_in[];
+
+out TCS_OUT {
+    vec3 pos;
+    vec2 texCoord;
+} tcs_out[];
+
+uniform vec3 u_view_pos;
+
+float getTessLevel(float dist)
+{
+    if (dist < 50.0) return 1024.0;   // Reduced from 16
+    if (dist < 200.0) return 1.0;   // Reduced from 8
+    if (dist < 300.0) return 1.0;   // Reduced from 4
+    return 1.0;                     // Reduced from 2
+}
+
+void main()
+{
+    tcs_out[gl_InvocationID].pos = tcs_in[gl_InvocationID].pos;
+    tcs_out[gl_InvocationID].texCoord = tcs_in[gl_InvocationID].texCoord;
+
+    if (gl_InvocationID == 0)
+    {
+        vec3 patchCenter = (tcs_in[0].pos + tcs_in[1].pos + tcs_in[2].pos + tcs_in[3].pos) * 0.25;
+        float dist = distance(patchCenter, u_view_pos);
+        float level = getTessLevel(dist);
+
+        gl_TessLevelOuter[0] = level;
+        gl_TessLevelOuter[1] = level;
+        gl_TessLevelOuter[2] = level;
+        gl_TessLevelOuter[3] = level;
+        gl_TessLevelInner[0] = level;
+        gl_TessLevelInner[1] = level;
+    }
+}

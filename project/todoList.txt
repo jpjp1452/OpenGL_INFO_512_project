@@ -1,0 +1,3 @@
+ELEMENT BUFFER OBJECT (EBO) EXO 4
+ADD Padding byte 4 byte,
+Structure of array

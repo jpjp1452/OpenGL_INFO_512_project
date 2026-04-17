@@ -5,8 +5,6 @@
 #include <fstream>
 #include <string>
 #include <sstream>
-#include <functional>
-#include <tuple>
 #include <vector>
 #include <unordered_map>
 #include <stdexcept>
@@ -23,6 +21,15 @@
 #include "stb_image.h"
 #endif
 
+#ifndef PATH_TO_OBJECTS
+#define PATH_TO_OBJECTS "Model"
+#endif
+
+
+#ifndef PATH_TO_TEXTURE
+#define PATH_TO_TEXTURE "Textures"
+#endif
+
 #define MAX_SIZE_T std::numeric_limits<size_t>::max()
 
 #include "shader.h"
@@ -36,11 +43,39 @@
  * en gros sotck les data dans une frome de tableau
  */
 
+std::string textureNameInMtl(const std::string &mtlPath)
+{
+    std::ifstream infile(mtlPath);
+    if (!infile.is_open())
+    {
+        throw std::runtime_error(std::string("Failed to open MTL file: ") + mtlPath);
+    }
+    std::string line;
+    bool foundTexture = false;
+    while (std::getline(infile, line))
+    {
+        std::istringstream iss(line);
+        std::string indice;
+        iss >> indice;
+        if (indice == "map_Kd")
+        {
+            std::string textureName;
+            iss >> textureName;
+            infile.close();
+            return textureName;
+        }
+    }
+    infile.close();
+    throw std::runtime_error("No texture found in MTL file: " + mtlPath);
+}
+
+
+
 std::tuple<unsigned int, unsigned int, unsigned int> split(const std::string &s, char delimiter)
 {
     size_t start = 0;
     size_t index = 0;
-    std::vector<unsigned int> tokens;
+    std::vector<size_t> tokens;
 
     while (index < s.size())
     {
@@ -48,11 +83,11 @@ std::tuple<unsigned int, unsigned int, unsigned int> split(const std::string &s,
         {
             if (start != index)
             {
-                tokens.push_back(static_cast<unsigned int>(std::stoul(s.substr(start, index - start))));
+                tokens.push_back(std::stoul(s.substr(start, index - start)));
             }
             else
             {
-                tokens.push_back(0);
+                tokens.push_back(MAX_SIZE_T);
             }
             start = index + 1;
         }
@@ -60,22 +95,24 @@ std::tuple<unsigned int, unsigned int, unsigned int> split(const std::string &s,
     }
     if (start != index)
     {
-        tokens.push_back(static_cast<unsigned int>(std::stoul(s.substr(start, index - start))));
+        tokens.push_back(std::stoul(s.substr(start, index - start)));
     }
     else
     {
-        tokens.push_back(0);
+        tokens.push_back(MAX_SIZE_T);
     }
-    if (tokens.size() <= 3)
+    if (tokens.size() < 3)
     {
-        tokens.push_back(0);
+        tokens.push_back(MAX_SIZE_T);
     }
     if (tokens.size() != 3)
-    {
+    {   
+        std::cout << "tokens size : " << tokens.size() << std::endl;    
         throw std::runtime_error("Invalid face data: " + s);
     }
     return {tokens[0], tokens[1], tokens[2]};
 }
+
 
 struct Vertex
 {
@@ -91,18 +128,6 @@ struct FaceData
     std::tuple<unsigned int, unsigned int, unsigned int> f3;
 };
 
-struct indices
-{
-    unsigned positionIndex;
-    unsigned textureIndex;
-    unsigned normalIndex;
-};
-
-struct VertexNormalCounter
-{
-    glm::vec3 Normal;
-    int count = 0;
-};
 
 struct IndicesKeyHash
 {
@@ -115,10 +140,24 @@ struct IndicesKeyHash
     }
 };
 
+
+struct VertexNormalCounter
+{
+    glm::vec3 Normal;
+    int count = 0;
+};
+
+struct uniformSetters
+{
+    std::vector<std::pair<std::string, float>> setFloats;
+    std::vector<std::pair<std::string, GLint>> setIntegers;
+    std::vector<std::pair<std::string, glm::vec3>> setVec3;
+    std::vector<std::pair<std::string, glm::mat4>> setMat4;
+};
+
 class Object
 {
 
-private:
 public:
     std::vector<glm::vec3> positions;
     std::vector<glm::vec2> textures;
@@ -130,10 +169,16 @@ public:
     int numVertices;
     GLuint VBO, VAO, EBO;
     GLuint textureID = 0;
-    glm::mat4 model = glm::mat4(1.0);
+
+
+    Object() = default;
 
     Object(const char *path)
-    {
+    {   
+        //print path
+        std::cout << "Loading model from path: " << path << std::endl;
+
+
         if (path == nullptr || path[0] == '\0')
         {
             throw std::invalid_argument("Object: invalid OBJ path (null or empty)");
@@ -182,12 +227,14 @@ public:
             }
             else if (indice == "mtllib")
             {
-                iss >> mtlPath;
-            }
-            else if (indice == "usemtl")
-            {
                 hasTexture = true;
-                iss >> texturePath;
+                iss >> mtlPath;
+                mtlPath = "/" + mtlPath;
+                mtlPath = PATH_TO_OBJECTS + mtlPath;
+                //adding png extension
+                texturePath = textureNameInMtl(mtlPath);
+                texturePath = "/" + texturePath;
+                texturePath = PATH_TO_TEXTURE + texturePath;
             }
         }
         std::cout << "OBJ file parsed successfully." << std::endl;
@@ -221,17 +268,17 @@ public:
                 if (vertexIndexToNormalMap.find(p1) == vertexIndexToNormalMap.end())
                 {
                     normals.push_back(glm::vec3(0.0f));
-                    vertexIndexToNormalMap[p1] = vertexIndexToNormalMap.size();
+                    vertexIndexToNormalMap[p1] = normals.size();
                 }
                 if (vertexIndexToNormalMap.find(p2) == vertexIndexToNormalMap.end())
                 {
                     normals.push_back(glm::vec3(0.0f));
-                    vertexIndexToNormalMap[p2] = vertexIndexToNormalMap.size();
+                    vertexIndexToNormalMap[p2] = normals.size();
                 }
                 if (vertexIndexToNormalMap.find(p3) == vertexIndexToNormalMap.end())
                 {
                     normals.push_back(glm::vec3(0.0f));
-                    vertexIndexToNormalMap[p3] = vertexIndexToNormalMap.size();
+                    vertexIndexToNormalMap[p3] = normals.size();
                 }
             }
             for (auto &entry : vertexNormalMap)
@@ -247,17 +294,20 @@ public:
                 size_t p2 = std::get<0>(face.f2);
                 size_t p3 = std::get<0>(face.f3);
 
-                std::get<2>(face.f1) = vertexIndexToNormalMap[p1];
-                std::get<2>(face.f2) = vertexIndexToNormalMap[p2];
-                std::get<2>(face.f3) = vertexIndexToNormalMap[p3];
+                face.f1 = std::make_tuple(std::get<0>(face.f1), std::get<1>(face.f1), vertexIndexToNormalMap[p1]);
+                face.f2 = std::make_tuple(std::get<0>(face.f2), std::get<1>(face.f2), vertexIndexToNormalMap[p2]);
+                face.f3 = std::make_tuple(std::get<0>(face.f3), std::get<1>(face.f3), vertexIndexToNormalMap[p3]);
+                
             }
+            std::cout << "Normals calculated successfully." << std::endl;
         }
 
         infile.close();
-        if (textures.empty())
+        if (textures.empty() && hasTexture)
         {
-            throw std::runtime_error("Texture specified in OBJ file but no texture coordinates found.");
+            throw std::runtime_error("No texture coordinates found in OBJ file");
         }
+
 
         unsigned uniqueVerticesCount = 0;
         using indicesKey = std::tuple<unsigned int, unsigned int, unsigned int>;
@@ -271,8 +321,13 @@ public:
                 if (uniqueVerticesMap.find(indicesKey) == uniqueVerticesMap.end())
                 {
                     Vertex vertex;
+                    std::cout << "indicesKey : " << std::get<0>(indicesKey) << " / " << std::get<1>(indicesKey) << " / " << std::get<2>(indicesKey) << std::endl;
                     vertex.Position = positions.at(std::get<0>(indicesKey) - 1);
-                    vertex.Texture = textures.at(std::get<1>(indicesKey) - 1);
+                    if(hasTexture){
+                        vertex.Texture = textures.at(std::get<1>(indicesKey) - 1);
+                    } else {
+                        vertex.Texture = glm::vec2(0.0f, 0.0f);
+                    }
                     vertex.Normal = normals.at(std::get<2>(indicesKey) - 1);
                     vertices.push_back(vertex);
                     uniqueVerticesMap[indicesKey] = uniqueVerticesCount++;
@@ -281,7 +336,8 @@ public:
             }
         }
 
-        /*
+
+/*
         for (const auto &face : facesIndices)
         {
             size_t p1 = std::get<0>(face.f1);
@@ -296,28 +352,36 @@ public:
 
             Vertex v1, v2, v3;
             v1.Position = positions.at(p1 - 1);
-            v1.Texture = textures.at(t1 - 1);
+            if (t1 != MAX_SIZE_T && !textures.empty())
+                v1.Texture = textures.at(t1 - 1);
+            else
+                v1.Texture = glm::vec2(0.0f, 0.0f);
             v1.Normal = normals.at(n1 - 1);
 
             v2.Position = positions.at(p2 - 1);
-            v2.Texture = textures.at(t2 - 1);
+            if (t2 != MAX_SIZE_T && !textures.empty())
+                v2.Texture = textures.at(t2 - 1);
+            else
+                v2.Texture = glm::vec2(0.0f, 0.0f);
             v2.Normal = normals.at(n2 - 1);
 
             v3.Position = positions.at(p3 - 1);
-            v3.Texture = textures.at(t3 - 1);
+            if (t3 != MAX_SIZE_T && !textures.empty())
+                v3.Texture = textures.at(t3 - 1);
+            else
+                v3.Texture = glm::vec2(0.0f, 0.0f);
             v3.Normal = normals.at(n3 - 1);
 
             vertices.push_back(v1);
             vertices.push_back(v2);
             vertices.push_back(v3);
         }
-        */
-
+*/
         numVertices = vertices.size();
         printf("Model loaded with %d vertices\n", numVertices);
     }
 
-    void makeObject(Shader shader, bool texture = true)
+    void makeObject(Shader shader)
     {
         /* This is a working but not perfect solution, you can improve it if you need/want
          * What happens if you call this function twice on an Model ?
@@ -357,8 +421,7 @@ public:
         auto att_pos = glGetAttribLocation(shader.ID, "position");
         glEnableVertexAttribArray(att_pos);
         glVertexAttribPointer(att_pos, 3, GL_FLOAT, false, 8 * sizeof(float), (void *)0);
-
-        if (texture)
+        if (hasTexture)
         {
             auto att_tex = glGetAttribLocation(shader.ID, "tex_coord");
             glEnableVertexAttribArray(att_tex);
@@ -378,6 +441,7 @@ public:
     void draw()
     {
 
+
         glBindVertexArray(this->VAO);
 
         // Binder la texture si elle existe
@@ -394,11 +458,13 @@ public:
     bool loadTexture(const char *texturePath)
     {
         int width, height, nrChannels;
+        stbi_set_flip_vertically_on_load(true); 
         unsigned char *data = stbi_load(texturePath, &width, &height, &nrChannels, 0);
 
         if (!data)
         {
             std::cerr << "Failed to load texture: " << texturePath << std::endl;
+            hasTexture = false;
             return false;
         }
 
@@ -424,4 +490,95 @@ public:
         return true;
     }
 };
+
+struct ObjectsData
+{
+    Object object;
+    Shader shader;
+    std::vector<glm::mat4> modelMatrices;
+};
+
+class ObjectManager
+{
+public:
+    std::unordered_map<std::string, ObjectsData> objects;
+
+    ObjectManager() = default;
+
+    void addObject(const std::string &name, const char *objPath, Shader shader)
+    {   
+        std::cout << "Adding object with name: " << name << std::endl;
+        auto it = objects.find(name);
+        if (it != objects.end())
+        {
+            std::cout << "Object with name " << name << " already exists, we only add the model matrix to the list" << std::endl;
+            it->second.modelMatrices.push_back(glm::mat4(1.0f));
+            return;
+        }
+        Object obj(objPath);
+        obj.makeObject(shader);
+        if (obj.hasTexture)
+        {
+            if (!obj.loadTexture(obj.texturePath.c_str()))
+            {
+                std::cout << "Failed to load texture for object " << name << ", the object will be rendered without texture" << std::endl;
+            }
+        }
+        objects.emplace(name, ObjectsData{obj, shader, {glm::mat4(1.0f)}});
+    }
+
+    void drawObject(const std::string &name, uniformSetters &setters)
+    {
+        auto it = objects.find(name);
+        if (it == objects.end())
+        {
+            std::cout << "Object with name " << name << " doesn't exist" << std::endl;
+            return;
+        }
+
+        ObjectsData &data = it->second;
+        data.shader.use();
+
+        // Set default uniforms for texture shader
+
+        if (data.object.hasTexture){
+            data.shader.setInteger("useTexture", 1);
+            data.shader.setInteger("texture1", 0);
+        }
+
+
+
+        // Apply custom uniforms from setters
+        for (const auto &set : setters.setIntegers)
+            data.shader.setInteger(set.first.c_str(), set.second);
+        for (const auto &set : setters.setFloats)
+            data.shader.setFloat(set.first.c_str(), set.second);
+        for (const auto &set : setters.setVec3)
+            data.shader.setVector3f(set.first.c_str(), set.second);
+        for (const auto &set : setters.setMat4)
+            data.shader.setMatrix4(set.first.c_str(), set.second);
+
+        if (data.modelMatrices.empty())
+            return;
+
+        // Reduce redundant state changes: bind once, draw many.
+        glBindVertexArray(data.object.VAO);
+        if (data.object.textureID != 0)
+        {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, data.object.textureID);
+        }
+
+        // Draw all model instances
+        for (const auto &model : data.modelMatrices)
+        {
+            data.shader.setMatrix4("M", model);
+            data.shader.setMatrix4("itM", glm::transpose(glm::inverse(model)));
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(data.object.indices.size()), GL_UNSIGNED_INT, 0);
+        }
+
+        glBindVertexArray(0);
+    }
+};
+
 #endif

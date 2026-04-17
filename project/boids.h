@@ -13,7 +13,7 @@
 #define SEPARATION_DISTANCE 20.0f
 #define MAX_DISTANCE_FROM_CENTER 30.0f
 #define MIN_DISTANCE_FROM_CENTER 5.0f
-#define CAMERA_ATTRACTION_FORCE 0.005f
+#define CAMERA_ATTRACTION_FORCE 0.01f
 #define EPSILON 1e-6f
 
 inline glm::vec3 safeNormalize(const glm::vec3 &v)
@@ -89,7 +89,7 @@ public:
             }
 
             // add perturbation to avoid perfect alignment
-            float perturbationStrength = 0.02f;
+            float perturbationStrength = 0.3f;
             glm::vec3 perturbation = glm::vec3((rand() / (float)RAND_MAX) * 2 - 1, (rand() / (float)RAND_MAX) * 2 - 1, (rand() / (float)RAND_MAX) * 2 - 1) * perturbationStrength;
             cohesion += perturbation;
 

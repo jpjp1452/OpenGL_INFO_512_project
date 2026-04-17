@@ -71,7 +71,7 @@ std::string textureNameInMtl(const std::string &mtlPath)
 
 
 
-std::vector<size_t> split(const std::string &s, char delimiter)
+std::tuple<unsigned int, unsigned int, unsigned int> split(const std::string &s, char delimiter)
 {
     size_t start = 0;
     size_t index = 0;
@@ -110,8 +110,9 @@ std::vector<size_t> split(const std::string &s, char delimiter)
         std::cout << "tokens size : " << tokens.size() << std::endl;    
         throw std::runtime_error("Invalid face data: " + s);
     }
-    return tokens;
+    return {tokens[0], tokens[1], tokens[2]};
 }
+
 
 struct Vertex
 {
@@ -122,16 +123,24 @@ struct Vertex
 
 struct FaceData
 {
-    std::vector<size_t> f1;
-    std::vector<size_t> f2;
-    std::vector<size_t> f3;
+    std::tuple<unsigned int, unsigned int, unsigned int> f1;
+    std::tuple<unsigned int, unsigned int, unsigned int> f2;
+    std::tuple<unsigned int, unsigned int, unsigned int> f3;
 };
 
-struct Face
+
+struct IndicesKeyHash
 {
-    glm::vec3 v1, v2, v3;
-    glm::vec3 Normal;
+    std::size_t operator()(const std::tuple<unsigned int, unsigned int, unsigned int> &key) const
+    {
+        const std::size_t h1 = std::hash<unsigned int>{}(std::get<0>(key));
+        const std::size_t h2 = std::hash<unsigned int>{}(std::get<1>(key));
+        const std::size_t h3 = std::hash<unsigned int>{}(std::get<2>(key));
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
 };
+
+
 struct VertexNormalCounter
 {
     glm::vec3 Normal;
@@ -154,10 +163,11 @@ public:
     std::vector<glm::vec2> textures;
     std::vector<glm::vec3> normals;
     std::vector<Vertex> vertices;
+    std::vector<unsigned int> indices;
     bool hasTexture = false;
     std::string texturePath;
     int numVertices;
-    GLuint VBO, VAO;
+    GLuint VBO, VAO, EBO;
     GLuint textureID = 0;
 
 
@@ -239,9 +249,9 @@ public:
             std::cout << "Calculating normals..." << std::endl;
             for (const auto &face : facesIndices)
             {
-                size_t p1 = face.f1[0];
-                size_t p2 = face.f2[0];
-                size_t p3 = face.f3[0];
+                size_t p1 = std::get<0>(face.f1);
+                size_t p2 = std::get<0>(face.f2);
+                size_t p3 = std::get<0>(face.f3);
 
                 glm::vec3 v1 = positions.at(p1 - 1);
                 glm::vec3 v2 = positions.at(p2 - 1);
@@ -258,17 +268,17 @@ public:
                 if (vertexIndexToNormalMap.find(p1) == vertexIndexToNormalMap.end())
                 {
                     normals.push_back(glm::vec3(0.0f));
-                    vertexIndexToNormalMap[p1] = vertexIndexToNormalMap.size();
+                    vertexIndexToNormalMap[p1] = normals.size();
                 }
                 if (vertexIndexToNormalMap.find(p2) == vertexIndexToNormalMap.end())
                 {
                     normals.push_back(glm::vec3(0.0f));
-                    vertexIndexToNormalMap[p2] = vertexIndexToNormalMap.size();
+                    vertexIndexToNormalMap[p2] = normals.size();
                 }
                 if (vertexIndexToNormalMap.find(p3) == vertexIndexToNormalMap.end())
                 {
                     normals.push_back(glm::vec3(0.0f));
-                    vertexIndexToNormalMap[p3] = vertexIndexToNormalMap.size();
+                    vertexIndexToNormalMap[p3] = normals.size();
                 }
             }
             for (auto &entry : vertexNormalMap)
@@ -280,14 +290,16 @@ public:
 
             for (auto &face : facesIndices)
             {
-                size_t p1 = face.f1[0];
-                size_t p2 = face.f2[0];
-                size_t p3 = face.f3[0];
+                size_t p1 = std::get<0>(face.f1);
+                size_t p2 = std::get<0>(face.f2);
+                size_t p3 = std::get<0>(face.f3);
 
-                face.f1[2] = vertexIndexToNormalMap[p1];
-                face.f2[2] = vertexIndexToNormalMap[p2];
-                face.f3[2] = vertexIndexToNormalMap[p3];
+                face.f1 = std::make_tuple(std::get<0>(face.f1), std::get<1>(face.f1), vertexIndexToNormalMap[p1]);
+                face.f2 = std::make_tuple(std::get<0>(face.f2), std::get<1>(face.f2), vertexIndexToNormalMap[p2]);
+                face.f3 = std::make_tuple(std::get<0>(face.f3), std::get<1>(face.f3), vertexIndexToNormalMap[p3]);
+                
             }
+            std::cout << "Normals calculated successfully." << std::endl;
         }
 
         infile.close();
@@ -295,18 +307,47 @@ public:
         {
             throw std::runtime_error("No texture coordinates found in OBJ file");
         }
-        std::cout << "Normals calculated successfully." << std::endl;
+
+
+        unsigned uniqueVerticesCount = 0;
+        using indicesKey = std::tuple<unsigned int, unsigned int, unsigned int>;
+        std::unordered_map<indicesKey, unsigned int, IndicesKeyHash> uniqueVerticesMap;
+        std::cout << "Processing faces to create vertices and indices..." << std::endl;
         for (const auto &face : facesIndices)
         {
-            size_t p1 = face.f1[0];
-            size_t t1 = face.f1[1];
-            size_t n1 = face.f1[2];
-            size_t p2 = face.f2[0];
-            size_t t2 = face.f2[1];
-            size_t n2 = face.f2[2];
-            size_t p3 = face.f3[0];
-            size_t t3 = face.f3[1];
-            size_t n3 = face.f3[2];
+            std::tuple<unsigned int, unsigned int, unsigned int> verticesIndeces[3] = {face.f1, face.f2, face.f3};
+            for (const auto &indicesKey : verticesIndeces)
+            {
+                if (uniqueVerticesMap.find(indicesKey) == uniqueVerticesMap.end())
+                {
+                    Vertex vertex;
+                    vertex.Position = positions.at(std::get<0>(indicesKey) - 1);
+                    if(hasTexture){
+                        vertex.Texture = textures.at(std::get<1>(indicesKey) - 1);
+                    } else {
+                        vertex.Texture = glm::vec2(0.0f, 0.0f);
+                    }
+                    vertex.Normal = normals.at(std::get<2>(indicesKey) - 1);
+                    vertices.push_back(vertex);
+                    uniqueVerticesMap[indicesKey] = uniqueVerticesCount++;
+                }
+                indices.push_back(uniqueVerticesMap[indicesKey]);
+            }
+        }
+
+
+/*
+        for (const auto &face : facesIndices)
+        {
+            size_t p1 = std::get<0>(face.f1);
+            size_t t1 = std::get<1>(face.f1);
+            size_t n1 = std::get<2>(face.f1);
+            size_t p2 = std::get<0>(face.f2);
+            size_t t2 = std::get<1>(face.f2);
+            size_t n2 = std::get<2>(face.f2);
+            size_t p3 = std::get<0>(face.f3);
+            size_t t3 = std::get<1>(face.f3);
+            size_t n3 = std::get<2>(face.f3);
 
             Vertex v1, v2, v3;
             v1.Position = positions.at(p1 - 1);
@@ -334,7 +375,7 @@ public:
             vertices.push_back(v2);
             vertices.push_back(v3);
         }
-
+*/
         numVertices = vertices.size();
         printf("Model loaded with %d vertices\n", numVertices);
     }
@@ -364,16 +405,21 @@ public:
 
         glGenVertexArrays(1, &VAO);
         glGenBuffers(1, &VBO);
+        glGenBuffers(1, &EBO);
 
-        // define VBO and VAO as active buffer and active vertex array
         glBindVertexArray(VAO);
+
+        //VBO
         glBindBuffer(GL_ARRAY_BUFFER, VBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * numVertices, data, GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 8 * numVertices, data, GL_STATIC_DRAW);
+
+        //EBO
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(unsigned int) * indices.size(), indices.data(), GL_STATIC_DRAW);
 
         auto att_pos = glGetAttribLocation(shader.ID, "position");
         glEnableVertexAttribArray(att_pos);
         glVertexAttribPointer(att_pos, 3, GL_FLOAT, false, 8 * sizeof(float), (void *)0);
-
         if (hasTexture)
         {
             auto att_tex = glGetAttribLocation(shader.ID, "tex_coord");
@@ -394,6 +440,7 @@ public:
     void draw()
     {
 
+
         glBindVertexArray(this->VAO);
 
         // Binder la texture si elle existe
@@ -403,7 +450,7 @@ public:
             glBindTexture(GL_TEXTURE_2D, textureID);
         }
 
-        glDrawArrays(GL_TRIANGLES, 0, numVertices);
+        glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
     }
 
     // Charger une texture PNG
@@ -459,11 +506,9 @@ public:
 
     void addObject(const std::string &name, const char *objPath, Shader shader)
     {   
-        std::cout << "Adding object with name: " << name << std::endl;
         auto it = objects.find(name);
         if (it != objects.end())
         {
-            std::cout << "Object with name " << name << " already exists, we only add the model matrix to the list" << std::endl;
             it->second.modelMatrices.push_back(glm::mat4(1.0f));
             return;
         }
@@ -525,7 +570,8 @@ public:
         for (const auto &model : data.modelMatrices)
         {
             data.shader.setMatrix4("M", model);
-            glDrawArrays(GL_TRIANGLES, 0, data.object.numVertices);
+            data.shader.setMatrix4("itM", glm::transpose(glm::inverse(model)));
+            glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(data.object.indices.size()), GL_UNSIGNED_INT, 0);
         }
 
         glBindVertexArray(0);
