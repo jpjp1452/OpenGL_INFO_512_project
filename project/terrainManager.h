@@ -139,6 +139,7 @@ public:
         }   
 
 
+        
 
         std::cout << "Texture loaded: procedural_perlin_noise (" << WIDTH << "x" << WIDTH << ")" << std::endl;
     }
