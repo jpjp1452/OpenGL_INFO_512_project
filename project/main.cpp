@@ -100,6 +100,31 @@ glm::mat4 rotateAtoB(glm::vec3 a, glm::vec3 b,glm::vec3 up = glm::vec3(0.0f, 1.0
     }
 }  
 
+void loadCubemapFace(const char* path, const GLenum& targetFace)
+{
+    int imWidth, imHeight, imNrChannels;
+    unsigned char* data = stbi_load(path, &imWidth, &imHeight, &imNrChannels, 0);
+    if (data)
+    {
+        GLenum format = GL_RGB;
+        if (imNrChannels == 1)
+            format = GL_RED;
+        else if (imNrChannels == 3)
+            format = GL_RGB;
+        else if (imNrChannels == 4)
+            format = GL_RGBA;
+
+        glTexImage2D(targetFace, 0, format, imWidth, imHeight, 0, format, GL_UNSIGNED_BYTE, data);
+    }
+    else {
+        std::cout << "Failed to Load texture: " << path << std::endl;
+        const char* reason = stbi_failure_reason();
+        std::cout << (reason == NULL ? "Unknown reason" : reason) << std::endl;
+    }
+    stbi_image_free(data);
+}
+
+
 
 int main()
 {  
@@ -184,11 +209,7 @@ int main()
     ObjectManager objectManager;
     //Shader textureLightingShader(PATH_TO_SHADERS "/textureLighting.vert", PATH_TO_SHADERS "/textureLighting.frag");
     
-    ShaderFilePaths shaderPaths;
-    shaderPaths.addFragmentShader(PATH_TO_SHADERS "/textureLighting.frag");
-    shaderPaths.addVertexShader(PATH_TO_SHADERS "/textureLighting.vert");
-    Shader textureLightingShader(shaderPaths);
-
+	Shader textureLightingShader = Shader(PATH_TO_SHADERS "/textureLighting.vert", PATH_TO_SHADERS "/textureLighting.frag");
 
     textureLightingShader.use();
     textureLightingShader.setFloat("shininess", 32.0f);
@@ -216,6 +237,30 @@ int main()
     terrainManager terrain(terrainShader);
 
 
+    Shader cubeMapShader = Shader(PATH_TO_SHADERS "/cubemap.vert", PATH_TO_SHADERS "/cubemap.frag");
+	objectManager.addObject("cubeMap", PATH_TO_OBJECTS "/cubeMap.obj", cubeMapShader);
+
+	Shader reflexionShader = Shader(PATH_TO_SHADERS "/sphereReflexion.vert", PATH_TO_SHADERS "/sphereReflexion.frag");
+	objectManager.addObject("reflectiveSphere", PATH_TO_OBJECTS "/sphere.obj", reflexionShader);
+
+	//Rendering reflective sphere with texture shader
+    float ambient = 0.1;
+    float diffuse = 0.5;
+    float specular = 0.8;
+    glm::vec3 materialColour = glm::vec3(0.5f, 0.6, 0.8);
+
+    reflexionShader.use();
+    reflexionShader.setFloat("shininess", 32.0f);
+    reflexionShader.setVector3f("materialColour", materialColour);
+    reflexionShader.setFloat("light.ambient_strength", ambient);
+    reflexionShader.setFloat("light.diffuse_strength", diffuse);
+    reflexionShader.setFloat("light.specular_strength", specular);
+    reflexionShader.setFloat("light.constant", 1.0);
+    reflexionShader.setFloat("light.linear", 0.14);
+    reflexionShader.setFloat("light.quadratic", 0.07);
+
+	// asteroids shader
+	Shader asteroidShader(PATH_TO_SHADERS "/asteroid.vert", PATH_TO_SHADERS "/asteroid.frag");
 
     float maxTranslation = 5.5f;
     float maxScale = 1.5f;
@@ -241,21 +286,9 @@ int main()
         glm::mat4 translation = glm::translate(glm::mat4(1.0f), boidManager.boids[i].position);
         glm::mat4 scaleM = glm::scale(glm::mat4(1.0f), glm::vec3(scale, scale, scale));
         data.modelMatrices[i] = translation * rotation * scaleM;
-
-
     }
 
     ObjectsData &data = objectManager.objects.at("fish");
-    
-
-
-    // Set the center as camera position
-    boidManager.center = camera.Position;
-    
-    
-
-
-
 
 
 
@@ -263,7 +296,49 @@ int main()
     //divide it by 10 
     sphereData.modelMatrices[0] = glm::translate(sphereData.modelMatrices[0], glm::vec3(0.0f, -0.5f, -8.0f));
     sphereData.modelMatrices[0] = glm::scale(sphereData.modelMatrices[0], glm::vec3(0.1f, 0.1f, 0.1f));
+    
 
+    ObjectsData& refSphereData = objectManager.objects.at("reflectiveSphere");
+	refSphereData.modelMatrices[0] = glm::translate(refSphereData.modelMatrices[0], glm::vec3(20.0f, 1.0f, 20.0f));
+	refSphereData.modelMatrices[0] = glm::scale(refSphereData.modelMatrices[0], glm::vec3(1.0f, 1.0f, 1.0f));
+
+
+    unsigned int asteroidAmount = 100000;
+    srand(glfwGetTime()); // initialize random seed	
+    float radius = 75.0;
+    float offset = 15.0f;
+    for (unsigned int i = 0; i < asteroidAmount; i++) {
+        objectManager.addObject("asteroid", PATH_TO_OBJECTS "/rock.obj", asteroidShader);
+        ObjectsData& asteroidData = objectManager.objects.at("asteroid");
+
+        glm::mat4 asteroidModel = glm::mat4(1.0f);
+        // 1. translation: displace along circle with 'radius' in range [-offset, offset]
+        float angle = (float)i / (float)asteroidAmount * 360.0f;
+        float displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
+        float x = sin(angle) * radius + displacement;
+        displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
+        float y = displacement * 0.4f; // keep height of field smaller compared to width of x and z
+        displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
+        float z = cos(angle) * radius + displacement;
+        asteroidModel = glm::translate(asteroidModel, glm::vec3(x, y, z));
+
+        // 2. scale: scale between 0.05 and 0.25f
+        float scale = (rand() % 20) / 100.0f + 0.05;
+        asteroidModel = glm::scale(asteroidModel, glm::vec3(scale));
+
+        // 3. rotation: add random rotation around a (semi)randomly picked rotation axis vector
+        float rotAngle = (rand() % 360);
+        asteroidModel = glm::rotate(asteroidModel, rotAngle, glm::vec3(0.4f, 0.6f, 0.8f));
+
+        // 4. now add to list of matrices
+        asteroidData.modelMatrices[i] = asteroidModel;
+    }
+
+
+
+    // Set the center as camera position
+    boidManager.center = camera.Position;
+    
     // Load shader
     Shader shader("shaders/basic.vert", "shaders/basic.frag");
 
@@ -290,7 +365,7 @@ int main()
         1.0f, // Blue
     };
 
-    GLuint VAO, VBO;
+    GLuint VAO, VBO, cubeMapTexture;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
 
@@ -309,10 +384,72 @@ int main()
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
+	// cube map texture setup
+    glGenTextures(1, &cubeMapTexture);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
+
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    //stbi_set_flip_vertically_on_load(true);
+
+    std::string pathToCubeMap = PATH_TO_TEXTURE "/cubemaps/skybox/";
+
+    std::map<std::string, GLenum> facesToLoad = {
+        {pathToCubeMap + "right.png",GL_TEXTURE_CUBE_MAP_POSITIVE_X},
+        {pathToCubeMap + "bottom.png",GL_TEXTURE_CUBE_MAP_POSITIVE_Y},
+        {pathToCubeMap + "front.png",GL_TEXTURE_CUBE_MAP_POSITIVE_Z},
+        {pathToCubeMap + "left.png",GL_TEXTURE_CUBE_MAP_NEGATIVE_X},
+        {pathToCubeMap + "top.png",GL_TEXTURE_CUBE_MAP_NEGATIVE_Y},
+        {pathToCubeMap + "back.png",GL_TEXTURE_CUBE_MAP_NEGATIVE_Z},
+    };
+    //load the six faces
+    for (std::pair<std::string, GLenum> pair : facesToLoad) {
+        loadCubemapFace(pair.first.c_str(), pair.second);
+    }
+
+	// vertex buffer for asteroid instancing (https://learnopengl.com/Advanced-OpenGL/Instancing)
+    ObjectsData& asteroidData = objectManager.objects.at("asteroid");
+    unsigned int instanceVBO;
+    glGenBuffers(1, &instanceVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+    glBufferData(GL_ARRAY_BUFFER, asteroidAmount * sizeof(glm::mat4), asteroidData.modelMatrices.data(), GL_STATIC_DRAW);
+
+	// keep the VAO of the asteroid model bound to set the instanced vertex attributes
+    unsigned int astVAO = asteroidData.object.VAO;
+    glBindVertexArray(astVAO);
+    
+    std::size_t vec4Size = sizeof(glm::vec4);
+    
+    glEnableVertexAttribArray(3);
+    glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)0);
+    
+    glEnableVertexAttribArray(4);
+    glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(1 * vec4Size));
+    
+    glEnableVertexAttribArray(5);
+    glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(2 * vec4Size));
+    
+    glEnableVertexAttribArray(6);
+    glVertexAttribPointer(6, 4, GL_FLOAT, GL_FALSE, sizeof(glm::mat4), (void*)(3 * vec4Size));
+
+    glVertexAttribDivisor(3, 1);
+    glVertexAttribDivisor(4, 1);
+    glVertexAttribDivisor(5, 1);
+    glVertexAttribDivisor(6, 1);
+
+    glBindVertexArray(0);
+
     // Main render loop
     std::cout << "Controls: W/A/S/D to move, Arrow keys to rotate, ESC to quit" << std::endl;
 
     glm::mat4 model = glm::mat4(1.0f);
+    glm::mat4 inverseModel = glm::transpose(glm::inverse(model));
+    glm::vec3 light_pos = glm::vec3(1.0, 2.0, 1.5);
     
     double prev = glfwGetTime();
     double prevUpdate = prev;
@@ -415,6 +552,54 @@ int main()
         terrainShader.setInteger("textureBrickBump", 2);
         glPatchParameteri(GL_PATCH_VERTICES, 4);
         terrain.draw();
+
+		// Draw cubMap
+		glDepthFunc(GL_LEQUAL);     // Accepte une profondeur de 1.0
+		glDisable(GL_CULL_FACE);    // Désactive le culling car la caméra est à l'intérieur du cube
+
+		cubeMapShader.use();
+		cubeMapShader.setMatrix4("V", view);
+		cubeMapShader.setMatrix4("P", projection);
+		cubeMapShader.setInteger("cubemapTexture", 0);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
+		objectManager.drawObject("cubeMap", uniformSetters());
+
+		// On restaure les états par défaut
+		glEnable(GL_CULL_FACE);
+		glDepthFunc(GL_LESS);
+
+		// Draw reflective sphere
+        reflexionShader.use();
+
+        reflexionShader.setMatrix4("M", model);
+        reflexionShader.setMatrix4("itM", inverseModel);
+        reflexionShader.setMatrix4("V", view);
+        reflexionShader.setMatrix4("P", projection);
+        reflexionShader.setVector3f("u_view_pos", camera.Position);
+
+        auto delta = light_pos + glm::vec3(0.0, 0.0, 2 * std::sin(now));
+        shader.setVector3f("light.light_pos", delta);
+		objectManager.drawObject("reflectiveSphere", uniformSetters());
+
+		// Draw asteroids
+        asteroidShader.use();
+        asteroidShader.setMatrix4("V", view);
+        asteroidShader.setMatrix4("P", projection);
+        asteroidShader.setInteger("useTexture", 1);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, asteroidData.object.textureID);
+
+        glBindVertexArray(asteroidData.object.VAO);
+        glDrawElementsInstanced(
+            GL_TRIANGLES,
+            static_cast<GLsizei>(asteroidData.object.indices.size()),
+            GL_UNSIGNED_INT,
+            0,
+            asteroidAmount
+        );
+        glBindVertexArray(0); // On dé-lie par propreté
 
         fps(now);
         glfwSwapBuffers(window);
