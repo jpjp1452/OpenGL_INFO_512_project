@@ -18,9 +18,9 @@ void main() {
     vec3 sphereNormal = normalize(position);
     
     // Wave patterns that propagate across the surface using position coordinates
-    float wave1 = sin(time * 0.6 + position.x * 3.0 + position.y * 2.0) * 0.28;
-    float wave2 = sin(time * 9.8 + position.y * 3.0 - position.z * 2.0) * 0.26;
-    float wave3 = sin(time * 0.4 + position.z * 2.5 + position.x * 1.5) * 0.15;
+    float wave1 = sin(time * 0.64 + position.x * 3.0 + position.y * 2.0) * 0.28;
+    float wave2 = sin(time * 1.8 + position.y * 3.0 - position.z * 2.0) * 0.26;
+    float wave3 = sin(time * 0.92 + position.z * 2.5 + position.x * 1.5) * 0.15;
     
     float totalWave = wave1 + wave2 + wave3;
     

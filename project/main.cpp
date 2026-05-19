@@ -226,6 +226,7 @@ int main()
 
     Shader sphereShader(PATH_TO_SHADERS "/sphere.vert", PATH_TO_SHADERS "/sphere.frag");
     objectManager.addObject("sphere", PATH_TO_OBJECTS "/sphere.obj", sphereShader);
+    objectManager.addObject("sunHalo", PATH_TO_OBJECTS "/sphere.obj", sphereShader);
 
     // Create terrain shader with tessellation
     ShaderFilePaths terrainShaderPaths;
@@ -293,9 +294,13 @@ int main()
 
 
     ObjectsData &sphereData = objectManager.objects.at("sphere");
-    //divide it by 10 
-    sphereData.modelMatrices[0] = glm::translate(sphereData.modelMatrices[0], glm::vec3(0.0f, -0.5f, -8.0f));
-    sphereData.modelMatrices[0] = glm::scale(sphereData.modelMatrices[0], glm::vec3(0.1f, 0.1f, 0.1f));
+    sphereData.modelMatrices[0] = glm::translate(glm::mat4(1.0f), glm::vec3(50.0f, 20.0f, -50.0f));
+    sphereData.modelMatrices[0] = glm::scale(sphereData.modelMatrices[0], glm::vec3(0.5f, 0.5f, 0.5f));
+
+	// Set up sun halo
+    ObjectsData &sunHaloData = objectManager.objects.at("sunHalo");
+    sunHaloData.modelMatrices[0] = glm::translate(glm::mat4(1.0f), glm::vec3(50.0f, 20.0f, -50.0f));
+    sunHaloData.modelMatrices[0] = glm::scale(sunHaloData.modelMatrices[0], glm::vec3(1.0f, 1.0f, 1.0f));
     
 
     ObjectsData& refSphereData = objectManager.objects.at("reflectiveSphere");
@@ -505,13 +510,22 @@ int main()
         setters.setVec3.push_back({"u_view_pos", camera.Position});
         
         uniformSetters sphereSetters;
-        //base color is blue
-        sphereSetters.setVec3.push_back({"baseColor", glm::vec3(0.01f, 0.08f, 0.88f)});
-        sphereSetters.setFloats.push_back({"time", now});
-        sphereSetters.setMat4.push_back({"V", view});
-        sphereSetters.setMat4.push_back({"P", projection});
-        sphereSetters.setVec3.push_back({"center", glm::vec3(0.0f, -0.5f, -8.0f)});
-        sphereSetters.setVec3.push_back({"view_pos", camera.Position});
+        sphereSetters.setVec3.push_back({ "baseColor", glm::vec3(1.0f, 0.12f, 0.03f) });
+        sphereSetters.setFloats.push_back({ "time", now });
+        sphereSetters.setMat4.push_back({ "V", view });
+        sphereSetters.setMat4.push_back({ "P", projection });
+        sphereSetters.setVec3.push_back({ "view_pos", camera.Position });
+        sphereSetters.setIntegers.push_back({ "isHalo", 0 });
+        sphereSetters.setFloats.push_back({ "haloIntensity", 0.0f });
+
+        uniformSetters haloSetters;
+        haloSetters.setVec3.push_back({ "baseColor", glm::vec3(1.0f, 0.18f, 0.05f) });
+        haloSetters.setFloats.push_back({ "time", now });
+        haloSetters.setMat4.push_back({ "V", view });
+        haloSetters.setMat4.push_back({ "P", projection });
+        haloSetters.setVec3.push_back({ "view_pos", camera.Position });
+        haloSetters.setIntegers.push_back({ "isHalo", 1 });
+        haloSetters.setFloats.push_back({ "haloIntensity", 1.35f });
 
 
         
@@ -534,9 +548,22 @@ int main()
 
 
         objectManager.drawObject("fish", setters);
-        glDepthMask(GL_FALSE);
+
+        // draw sun
         objectManager.drawObject("sphere", sphereSetters);
+
+        // draw halo 
+        glDisable(GL_CULL_FACE);
+        glDepthMask(GL_FALSE);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+        objectManager.drawObject("sunHalo", haloSetters);
+
+		// default states restauration
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthMask(GL_TRUE);
+        glEnable(GL_CULL_FACE);
+
 
         // Draw terrain
         terrainShader.use();
