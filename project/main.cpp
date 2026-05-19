@@ -308,7 +308,7 @@ int main()
 	refSphereData.modelMatrices[0] = glm::scale(refSphereData.modelMatrices[0], glm::vec3(1.0f, 1.0f, 1.0f));
 
 
-    unsigned int asteroidAmount = 100000;
+    unsigned int asteroidAmount = 1000;
     srand(glfwGetTime()); // initialize random seed	
     float radius = 75.0;
     float offset = 15.0f;
@@ -582,7 +582,7 @@ int main()
 
 		// Draw cubMap
 		glDepthFunc(GL_LEQUAL);     // Accepte une profondeur de 1.0
-		glDisable(GL_CULL_FACE);    // Désactive le culling car la caméra est à l'intérieur du cube
+		glDisable(GL_CULL_FACE);    // Dï¿½sactive le culling car la camï¿½ra est ï¿½ l'intï¿½rieur du cube
 
 		cubeMapShader.use();
 		cubeMapShader.setMatrix4("V", view);
@@ -590,9 +590,10 @@ int main()
 		cubeMapShader.setInteger("cubemapTexture", 0);
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
-		objectManager.drawObject("cubeMap", uniformSetters());
+        uniformSetters cubeMapSetters;
+		objectManager.drawObject("cubeMap", cubeMapSetters);
 
-		// On restaure les états par défaut
+		// On restaure les ï¿½tats par dï¿½faut
 		glEnable(GL_CULL_FACE);
 		glDepthFunc(GL_LESS);
 
@@ -607,7 +608,9 @@ int main()
 
         auto delta = light_pos + glm::vec3(0.0, 0.0, 2 * std::sin(now));
         shader.setVector3f("light.light_pos", delta);
-		objectManager.drawObject("reflectiveSphere", uniformSetters());
+        uniformSetters reflectiveSetters;
+
+		objectManager.drawObject("reflectiveSphere", reflectiveSetters);
 
 		// Draw asteroids
         asteroidShader.use();
