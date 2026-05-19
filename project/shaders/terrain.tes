@@ -17,6 +17,7 @@ out TES_OUT {
 uniform mat4 V;
 uniform mat4 P;
 uniform sampler2D heightMap;
+uniform float HEIGHT_SCALE;
 
 void main()
 {
@@ -34,7 +35,7 @@ void main()
 
     // Sample height from texture
     float height = texture(heightMap, texCoord).r;
-    pos.y = (height - 0.5) * 20.0; // map [0,1] to [-1, 1]
+    pos.y = (height - 0.5) * HEIGHT_SCALE; // map [0,1] to [-1, 1]
 
     //calculate normal based on heightmap
     float heightL = texture(heightMap, texCoord + vec2(-0.01, 0)).r;

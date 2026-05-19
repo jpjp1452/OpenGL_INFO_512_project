@@ -1,4 +1,5 @@
 #include <iostream>
+#include <thread>
 
 // Include glad before GLFW to avoid header conflicts
 #include <glad/glad.h>
@@ -8,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+
 
 #include "camera.h"
 #include "shader.h"
@@ -37,18 +39,35 @@
 #endif
 
 
-const int SCREEN_WIDTH = 800;
-const int SCREEN_HEIGHT = 600;
+const int SCREEN_WIDTH = 1280;
+const int SCREEN_HEIGHT = 720;
 
 #include "terrainManager.h"
+#include "asteriodManager.hpp"
 
-#define MouvementMultiplier 0.6f
-#define RotationMultiplier 1.9f
+#define SPEED_FACTOR 1.0f
+#define MouvementMultiplier 0.6f * SPEED_FACTOR
+#define RotationMultiplier 1.9f * SPEED_FACTOR
+#define JUMP_VELOCITY 0.2f * SPEED_FACTOR
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+float gravity = 0.1f;
+float verticalVelocity = 0.0f;
+bool freeFalling = false;
+
+
+
 
 
 void processInput(GLFWwindow *window)
 {
+
+
+    if ((glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) && !freeFalling)
+    {
+        verticalVelocity = JUMP_VELOCITY;
+        freeFalling = true;
+    }
+
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
@@ -72,33 +91,9 @@ void processInput(GLFWwindow *window)
 }
 
 
-glm::mat4 rotateAtoB(glm::vec3 a, glm::vec3 b,glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f))
-{
-    a = glm::normalize(a);
-    b = glm::normalize(b);
-    float cosTheta = glm::dot(a, b);
-    glm::vec3 rotationAxis;
-    if (cosTheta < -0.9999f)
-    {
-        // If vectors are opposite, find an orthogonal vector for rotation axis
-        rotationAxis = glm::cross(glm::vec3(0.0f, 0.0f, 1.0f), a);
-        if (glm::length(rotationAxis) < 0.0001f) // If collinear with Z, use X axis
-            rotationAxis = glm::cross(glm::vec3(1.0f, 0.0f, 0.0f), a);
-        rotationAxis = glm::normalize(rotationAxis);
-        return glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), rotationAxis);
-    }
-    else if (cosTheta > 0.9999f)
-    {
-        // If vectors are the same, no rotation needed
-        return glm::mat4(1.0f);
-    }
-    else
-    {
-        rotationAxis = glm::cross(a, b);
-        float angle = acos(cosTheta);
-        return glm::rotate(glm::mat4(1.0f), angle, rotationAxis);
-    }
-}  
+
+
+
 
 
 int main()
@@ -128,7 +123,7 @@ int main()
 */
 
 
-
+    
 
 
 
@@ -186,7 +181,7 @@ int main()
     
     ShaderFilePaths shaderPaths;
     shaderPaths.addFragmentShader(PATH_TO_SHADERS "/textureLighting.frag");
-    shaderPaths.addVertexShader(PATH_TO_SHADERS "/textureLighting.vert");
+    shaderPaths.addVertexShader(PATH_TO_SHADERS "/fishTextureLighting.vert");
     Shader textureLightingShader(shaderPaths);
 
 
@@ -204,65 +199,40 @@ int main()
 
 
     Shader sphereShader(PATH_TO_SHADERS "/sphere.vert", PATH_TO_SHADERS "/sphere.frag");
-    objectManager.addObject("sphere", PATH_TO_OBJECTS "/sphere.obj", sphereShader);
 
-    // Create terrain shader with tessellation
-    ShaderFilePaths terrainShaderPaths;
-    terrainShaderPaths.addVertexShader(PATH_TO_SHADERS "/terrain.vert");
-    terrainShaderPaths.addTessellationControlShader(PATH_TO_SHADERS "/terrain.tcs");
-    terrainShaderPaths.addTessellationEvaluationShader(PATH_TO_SHADERS "/terrain.tes");
-    terrainShaderPaths.addFragmentShader(PATH_TO_SHADERS "/terrain.frag");
-    Shader terrainShader(terrainShaderPaths);
-    terrainManager terrain(terrainShader);
+    size_t how_many_spheres = 1;
+    for (size_t i = 0; i < how_many_spheres; i++){
+        objectManager.addObject("sphere", PATH_TO_OBJECTS "/sphere.obj", sphereShader);
+    }
+
+
+
+
+
+
+
+
+
+    std::string terrainShaderPrefix = "terrain";
+    terrainManager terrain(terrainShaderPrefix);
 
 
 
     float maxTranslation = 5.5f;
     float maxScale = 1.5f;
     float minScale = 0.5f;
-    size_t numModelsTogenerate = 200;
-    BoidManager boidManager(numModelsTogenerate);
-    std::vector<float> fishScales(numModelsTogenerate);
-
+    size_t numModelsTogenerate = 100;
     for (size_t i = 0; i < numModelsTogenerate; i++)
     {
-        objectManager.addObject("fish", PATH_TO_OBJECTS "/Untitled.obj", textureLightingShader);
-        ObjectsData &data = objectManager.objects.at("fish");
-        // Random translation
-        float tx = ((rand() / (float)RAND_MAX) - 0.5f) * 2.0f * maxTranslation;
-        float ty = ((rand() / (float)RAND_MAX) - 0.5f) * 2.0f * maxTranslation;
-        float tz = ((rand() / (float)RAND_MAX) - 0.5f) * 2.0f * maxTranslation;
-        // Random scale
-        float scale = minScale + (rand() / (float)RAND_MAX) * (maxScale - minScale);
-        fishScales[i] = scale;
-        boidManager.boids[i].position = glm::vec3(tx, ty, tz);
-
-        glm::mat4 rotation = rotateAtoB(glm::vec3(1.0f, 0.0f, 0.0f), boidManager.boids[i].velocity);
-        glm::mat4 translation = glm::translate(glm::mat4(1.0f), boidManager.boids[i].position);
-        glm::mat4 scaleM = glm::scale(glm::mat4(1.0f), glm::vec3(scale, scale, scale));
-        data.modelMatrices[i] = translation * rotation * scaleM;
-
-
+        objectManager.addObject("fish", PATH_TO_OBJECTS "/small_green_alien.obj", textureLightingShader);
     }
+    AsteroidManager asteroidManager(numModelsTogenerate, terrain);
 
     ObjectsData &data = objectManager.objects.at("fish");
-    
-
-
-    // Set the center as camera position
-    boidManager.center = camera.Position;
-    
-    
-
-
-
-
 
 
     ObjectsData &sphereData = objectManager.objects.at("sphere");
     //divide it by 10 
-    sphereData.modelMatrices[0] = glm::translate(sphereData.modelMatrices[0], glm::vec3(0.0f, -0.5f, -8.0f));
-    sphereData.modelMatrices[0] = glm::scale(sphereData.modelMatrices[0], glm::vec3(0.1f, 0.1f, 0.1f));
 
     // Load shader
     Shader shader("shaders/basic.vert", "shaders/basic.frag");
@@ -334,20 +304,54 @@ int main()
 
     double lastTime = glfwGetTime();
     double now = lastTime;
+    float inc = 0.0f;
     while (!glfwWindowShouldClose(window))
-    {
-        processInput(window);
-
+    {   
         // Clear screen
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        // Use shader and set uniforms
-        shader.use();
-
+        
+        processInput(window);
         glm::mat4 view = camera.GetViewMatrix();
         glm::mat4 projection = camera.GetProjectionMatrix(camera.Zoom, (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT);
 
+        terrain.update(camera.Position);
+        float heightUnderCamera = terrain.height_under_camera(camera.Position);
+        //other check
+        float heightAtCamera2 = terrain.terrainHeightAt(camera.Position);
+
+        std::cout << "height under camera: " << heightUnderCamera << " height at camera: " << heightAtCamera2 << std::endl;
+        std::cout << "camera position: " << camera.Position.x << ", " << camera.Position.y << ", " << camera.Position.z << std::endl;
+
+        float minHeight = heightUnderCamera + 1.5f;
+        if (freeFalling)
+        {
+            verticalVelocity -= gravity * (now - lastTime);
+            camera.Position.y += verticalVelocity;
+            if (camera.Position.y < minHeight)
+            {
+                camera.Position.y = minHeight;
+                verticalVelocity = 0.0f;
+                freeFalling = false;
+            }
+        }
+        else
+        {
+            camera.Position.y = minHeight;
+        }
+        terrain.draw(view, projection, camera.Position, glm::vec3(0.0f, 100.0f, 0.0f));
+
+
+        inc += 0.01f;
+
+        
+        asteroidManager.update(data);
+
+
+
+
+        // Use shader and set uniforms
+        shader.use();
         shader.setMatrix4("M", model);
         shader.setMatrix4("V", view);
         shader.setMatrix4("P", projection);
@@ -375,50 +379,23 @@ int main()
         sphereSetters.setMat4.push_back({"P", projection});
         sphereSetters.setVec3.push_back({"center", glm::vec3(0.0f, -0.5f, -8.0f)});
         sphereSetters.setVec3.push_back({"view_pos", camera.Position});
-
-
-        
-        boidManager.center = camera.Position;
-        //boidManager.update((now - lastTime)*1.0f);
-
-        
-
-        //boidManager.update((now - lastTime)*1.0f);
-        ObjectsData &data = objectManager.objects.at("fish");
-        for (size_t i = 0; i < boidManager.boids.size(); i++)
-        {
-            glm::mat4 rotation = rotateAtoB(glm::vec3(1.0f, 0.0f, 0.0f), boidManager.boids[i].velocity);
-            glm::mat4 translation = glm::translate(glm::mat4(1.0f), boidManager.boids[i].position);
-            glm::mat4 scaleM = glm::scale(glm::mat4(1.0f), glm::vec3(fishScales[i], fishScales[i], fishScales[i]));
-            data.modelMatrices[i] = translation * rotation * scaleM;
-        }
-
-
-
-
         objectManager.drawObject("fish", setters);
         glDepthMask(GL_FALSE);
         objectManager.drawObject("sphere", sphereSetters);
         glDepthMask(GL_TRUE);
 
-        // Draw terrain
-        terrainShader.use();
-        glm::mat4 terrainModel = glm::scale(glm::mat4(1.0f), glm::vec3(50.0f, 50.0f, 50.0f));
-        terrainModel = terrainModel;
-        terrainShader.setMatrix4("M", terrainModel);
-        terrainShader.setMatrix4("V", view);
-        terrainShader.setMatrix4("P", projection);
-        terrainShader.setVector3f("u_view_pos", camera.Position);
-        terrainShader.setVector3f("lightPos", camera.Position + glm::vec3(0.0f, 10.0f, 0.0f));
-        terrainShader.setInteger("heightMap", 0);
-        terrainShader.setInteger("textureBrickColor", 1);
-        terrainShader.setInteger("textureBrickBump", 2);
-        glPatchParameteri(GL_PATCH_VERTICES, 4);
-        terrain.draw();
+
+
+        
+
+
+
+
 
         fps(now);
         glfwSwapBuffers(window);
         glfwPollEvents();
+        //sleep 0.1 seconds
     }
 
     // Cleanup

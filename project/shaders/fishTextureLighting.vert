@@ -17,10 +17,10 @@ uniform mat4 P;
 
 void main(){ 
     vec4 pos = vec4(position, 1.0);
-    float abs_z = 0;
+    float abs_z = 1.0;
     float moves = 1.0;
     float pivot = 0.0;
-    float amplitude = 0.3;
+    float amplitude = 0.7;
     float frequency = 5.0;
     float offset = 0.0;
 
@@ -28,7 +28,31 @@ void main(){
     moves = 0.0;
 
 
-    pos.z += (sin(offset+abs_z + time * frequency) * amplitude)* (abs_z);
+
+        if (pos.z > 0.0)
+        {
+            moves = 1.0;
+        }
+        else
+        {
+            moves = -1.0;
+        }
+    
+
+
+
+    if(pos.y < -0.25)
+    {   
+ 
+            if (abs(pos.z) <0.13 || pos.y < -0.4)
+            {
+                abs_z = abs(pos.y - -0.25);
+                pos.x += (sin( time * frequency) * amplitude)* (abs_z)*moves;
+            }
+    }
+    
+
+
 
 
     vec4 frag_coord = M*pos;

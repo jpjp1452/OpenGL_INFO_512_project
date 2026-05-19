@@ -11,7 +11,7 @@ out vec4 FragColor;
 uniform sampler2D textureBrickColor;
 uniform sampler2D textureBrickBump;
 uniform vec3 lightPos;
-
+uniform float HEIGHT_SCALE;
 void main()
 {
     // Color based on height
@@ -41,7 +41,7 @@ void main()
     color = mix(color, rock,         w4);
     color = mix(color, snow,         w5);
     */
-
+    
     // Texture atlas blend: smoothly transition from left half to right half by height.
     vec2 uvBase = frag_in.texCoord * 0.5;
     vec2 uvLow = uvBase;

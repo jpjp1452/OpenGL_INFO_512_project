@@ -77,7 +77,7 @@ class Shader
 {
 public:
 	GLuint ID;
-
+    Shader() = default;
 
     Shader(ShaderFilePaths shaderPaths)
     {   
