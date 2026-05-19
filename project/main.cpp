@@ -626,7 +626,7 @@ int main()
             0,
             asteroidAmount
         );
-        glBindVertexArray(0); // On dé-lie par propreté
+        glBindVertexArray(0); 
 
         fps(now);
         glfwSwapBuffers(window);

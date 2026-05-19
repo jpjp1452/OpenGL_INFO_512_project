@@ -14,7 +14,7 @@ uniform int isHalo;
 uniform float haloIntensity;
 
 void main()
-{
+{https://tools.wwwtyro.net/space-3d/index.html#animationSpeed=1&fov=80&nebulae=true&pointStars=true&resolution=1024&seed=7jbalciyna40&stars=true&sun=true
     vec3 N = normalize(v_normal);
     vec3 V = normalize(view_pos - v_worldPos);
 
