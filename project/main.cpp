@@ -429,7 +429,7 @@ int main()
         
         uniformSetters sphereSetters;
         //base color is blue
-        sphereSetters.setVec3.push_back({"baseColor", glm::vec3(0.01f, 0.08f, 0.88f)});
+        sphereSetters.setVec3.push_back({"baseColor", glm::vec3(0.88f, 0.88f, 0.18f)});
         sphereSetters.setFloats.push_back({"time", now});
         sphereSetters.setMat4.push_back({"V", view});
         sphereSetters.setMat4.push_back({"P", projection});
