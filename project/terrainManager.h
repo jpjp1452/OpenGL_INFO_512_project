@@ -25,7 +25,7 @@
 #define TERRAIN_RESOLUTION 64
 #define TERRAIN_INTENSITY_CHANGE 0.04f
 #define TERRAIN_FLAT_ZONE_SIZE (TERRAIN_RESOLUTION * 0.5f)
-#define TERRAIN_TRANSITION_SIZE 1.15f
+#define TERRAIN_TRANSITION_SIZE 1.40f
 #define TERRAIN_FLAT_HEIGHT 127.5f
 #define SOIL_TEXTURE "/Ground029_1K-PNG_Color.png"
 #define SOIL_BUMP_TEXTURE "/Ground029_1K-PNG_Displacement.png"
@@ -460,112 +460,71 @@ public:
     {
         float worldX = worldPos.x;
         float worldY = worldPos.z;
-        float signX = (worldX >= 0) ? 1.0f : -1.0f;
-        float signY = (worldY >= 0) ? 1.0f : -1.0f;
-        float floatChunkX = (worldX + scale * signX) / (2 * scale);
-        float floatChunkY = (worldY + scale * signY) / (2 * scale);
-        int chunkX = static_cast<int>(floatChunkX);
-        int chunkY = static_cast<int>(floatChunkY);
-        float decimalChunkX = floatChunkX - chunkX;
-        float decimalChunkY = floatChunkY - chunkY;
+        const float chunkSize = 2.0f * scale;
+        float floatChunkX = (worldX + scale) / chunkSize;
+        float floatChunkY = (worldY + scale) / chunkSize;
+        int chunkX = static_cast<int>(floor(floatChunkX));
+        int chunkY = static_cast<int>(floor(floatChunkY));
+        float decimalChunkX = floatChunkX - static_cast<float>(chunkX); 
+        float decimalChunkY = floatChunkY - static_cast<float>(chunkY); 
 
-        int indexX;
-        int indexY;
-        int indexHeightX[2];
-        int offsetXchunk[2];
-        int indexHeightY[2];
-        if (decimalChunkX > 0.0f)
+        float preciseIndexX = decimalChunkX * static_cast<float>(TERRAIN_RESOLUTION - 1);
+        float preciseIndexY = decimalChunkY * static_cast<float>(TERRAIN_RESOLUTION - 1);
+
+        int x0 = static_cast<int>(floor(preciseIndexX));
+        int y0 = static_cast<int>(floor(preciseIndexY));
+        int x1 = x0 + 1;
+        int y1 = y0 + 1;
+
+        int x0ChunkOffset = 0;
+        int x1ChunkOffset = 0;
+        int y0ChunkOffset = 0;
+        int y1ChunkOffset = 0;
+
+        if (x1 >= TERRAIN_RESOLUTION)
         {
-            indexX = static_cast<int>(decimalChunkX * TERRAIN_RESOLUTION);
-            indexHeightX[0] = static_cast<int>(floor(decimalChunkX * TERRAIN_RESOLUTION));
-            indexHeightX[1] = static_cast<int>(ceil(decimalChunkX * TERRAIN_RESOLUTION));
+            x1 = 0;
+            x1ChunkOffset = 1;
         }
-        else
+        if (y1 >= TERRAIN_RESOLUTION)
         {
-            indexX = static_cast<int>((1.0f + decimalChunkX) * TERRAIN_RESOLUTION);
-            indexHeightX[0] = static_cast<int>(ceil((1.0f + decimalChunkX) * TERRAIN_RESOLUTION));
-            indexHeightX[1] = static_cast<int>(floor((1.0f + decimalChunkX) * TERRAIN_RESOLUTION));
-            decimalChunkX += 1.0f; // for bilinear interpolation
-        }
-        if (decimalChunkY > 0.0f)
-        {
-            indexY = static_cast<int>(decimalChunkY * TERRAIN_RESOLUTION);
-            indexHeightY[0] = static_cast<int>(floor(decimalChunkY * TERRAIN_RESOLUTION));
-            indexHeightY[1] = static_cast<int>(ceil(decimalChunkY * TERRAIN_RESOLUTION));
-        }
-        else
-        {
-            indexY = static_cast<int>((1.0f + decimalChunkY) * TERRAIN_RESOLUTION);
-            indexHeightY[0] = static_cast<int>(ceil((1.0f + decimalChunkY) * TERRAIN_RESOLUTION));
-            indexHeightY[1] = static_cast<int>(floor((1.0f + decimalChunkY) * TERRAIN_RESOLUTION));
-            decimalChunkY += 1.0f; // for bilinear interpolation
+            y1 = 0;
+            y1ChunkOffset = 1;
         }
 
-        // std::cout << "chunkX: " << chunkX << ", chunkY: " << chunkY << std::endl;
-        // std::cout << "decimalChunkX: " << decimalChunkX << ", decimalChunkY: " << decimalChunkY << std::endl;
-        // std::cout << "indexX: " << indexX << ", indexY: " << indexY << std::endl;
-        // std::cout << "currentChunkX: " << currentChunkX << ", currentChunkY: " << currentChunkY << std::endl;
-
-        float avgHeight = 0.0f;
-        int count = 0;
-        const int sampleRadius = 2;
+        //std::cout << "chunkX: " << chunkX << ", chunkY: " << chunkY << std::endl;
+        //std::cout << "decimalChunkX: " << decimalChunkX << ", decimalChunkY: " << decimalChunkY << std::endl;
+        //std::cout << "indexX: " << x0 << ", indexY: " << y0 << std::endl;
+        //std::cout << "currentChunkX: " << currentChunkX << ", currentChunkY: " << currentChunkY << std::endl;
 
         int offsetXchunk_center = chunkX - currentChunkX;
         int offsetYchunk_center = chunkY - currentChunkY;
-        // std::cout << "offsetXchunk_center: " << offsetXchunk_center << ", offsetYchunk_center: " << offsetYchunk_center << std::endl;
+        //std::cout << "offsetXchunk_center: " << offsetXchunk_center << ", offsetYchunk_center: " << offsetYchunk_center << std::endl;
         if (abs(offsetXchunk_center) > 1 || abs(offsetYchunk_center) > 1)
         {
             return (127.5 / 255.0f - 0.5f) * TERRAIN_HEIGHT;
         }
 
         // bilinear interpolation for more accurate height under camera
-        float heighMatrix[2][2];
-        for (int i = 0; i < 2; i++)
-        {
-            for (int j = 0; j < 2; j++)
-            {
-                int sampleX = indexHeightX[j];
-                int sampleY = indexHeightY[i];
-                int chunkOffsetX = 0;
-                int chunkOffsetY = 0;
-                if (sampleX < 0)
-                {
-                    chunkOffsetX = -1;
-                    sampleX += TERRAIN_RESOLUTION;
-                }
-                else if (sampleX >= TERRAIN_RESOLUTION)
-                {
-                    chunkOffsetX = 1;
-                    sampleX -= TERRAIN_RESOLUTION;
-                }
-                if (sampleY < 0)
-                {
-                    chunkOffsetY = -1;
-                    sampleY += TERRAIN_RESOLUTION;
-                }
-                else if (sampleY >= TERRAIN_RESOLUTION)
-                {
-                    chunkOffsetY = 1;
-                    sampleY -= TERRAIN_RESOLUTION;
-                }
-                chunkOffsetX += offsetXchunk_center;
-                chunkOffsetY += offsetYchunk_center;
-                int samplechunkX = chunkOffsetX + 1;
-                int samplechunkY = chunkOffsetY + 1;
-                heighMatrix[i][j] = sampleHeightmap(samplechunkX, samplechunkY, sampleX, sampleY);
-                // std::cout << "heatMatrix[" << i << "][" << j << "] = " << heighMatrix[i][j] << std::endl;
-            }
-        }
+        int baseChunkSampleX = offsetXchunk_center + 1;
+        int baseChunkSampleY = offsetYchunk_center + 1;
 
-        float fracX = decimalChunkX * TERRAIN_RESOLUTION - indexHeightX[0];
-        float fracY = decimalChunkY * TERRAIN_RESOLUTION - indexHeightY[0];
-        float height0 = glm::mix(heighMatrix[0][0], heighMatrix[0][1], fracX);
-        float height1 = glm::mix(heighMatrix[1][0], heighMatrix[1][1], fracX);
+        float h00 = sampleHeightmap(baseChunkSampleX + x0ChunkOffset, baseChunkSampleY + y0ChunkOffset, x0, y0);
+        float h10 = sampleHeightmap(baseChunkSampleX + x1ChunkOffset, baseChunkSampleY + y0ChunkOffset, x1, y0);
+        float h01 = sampleHeightmap(baseChunkSampleX + x0ChunkOffset, baseChunkSampleY + y1ChunkOffset, x0, y1);
+        float h11 = sampleHeightmap(baseChunkSampleX + x1ChunkOffset, baseChunkSampleY + y1ChunkOffset, x1, y1);
 
-        float bilinearHeight = glm::mix(height0, height1, abs(fracY));
+        float fracX = preciseIndexX - static_cast<float>(x0);
+        float fracY = preciseIndexY - static_cast<float>(y0);
+        float height0 = glm::mix(h00, h10, fracX);
+        float height1 = glm::mix(h01, h11, fracX);
+
+        float bilinearHeight = glm::mix(height0, height1, fracY);
         // std::cout << "height00: " << height00 << ", height10: " << height10 << ", height01: " << height01 << ", height11: " << height11 << std::endl;
         // std::cout << "fracX: " << fracX << ", fracY: " << fracY << std::endl;
-        // std::cout << "bilinearHeight: " << bilinearHeight << std::endl;
+        //std::cout << "bilinearHeight: " << bilinearHeight << std::endl;
+        //std::cout << "bilinearHeight: " << bilinearHeight << std::endl;
+
         // std::cout << "heightUnderCamera before bilinear: " << heightUnderCamera << std::endl;
         return bilinearHeight;
     }
@@ -648,3 +607,4 @@ public:
         }
     }
 };
+            

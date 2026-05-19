@@ -24,5 +24,5 @@ void main() {
     // Combine lighting
     vec3 color = baseColor * (ambient + 0.7 * diffuse) + vec3(1.0) * specular;
     
-    FragColor = vec4(color, 0.2);
+    FragColor = vec4(color, 10.9);
 }

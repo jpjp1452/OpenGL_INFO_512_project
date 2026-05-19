@@ -42,8 +42,8 @@ class AsteroidManager
 public:
     std::vector<glm::vec3> asteroidPositions;
     std::vector<glm::vec3> asteroidScales;
-    terrainManager& terrain;
-    AsteroidManager(size_t how_many_asteroids, terrainManager& terrainManager) : terrain(terrainManager)
+    terrainManager &terrain;
+    AsteroidManager(size_t how_many_asteroids, terrainManager &terrainManager) : terrain(terrainManager)
     {
         float scaling = 4.0f;
         asteroidPositions.resize(how_many_asteroids);
@@ -63,7 +63,28 @@ public:
     }
 
     void update(ObjectsData &asteroidData)
-    {
+    {   
+        float minx = 99999999.0f;
+        float maxx = -99999999.0f;
+        float minz = 99999999.0f;
+        float maxz = -99999999.0f;
+        for (size_t i = 0; i < asteroidData.object.positions.size(); i++)
+        {
+            glm::vec3 pos = asteroidData.object.positions[i];
+            if (pos.x < minx) minx = pos.x;
+            if (pos.x > maxx) maxx = pos.x;
+            if (pos.z < minz) minz = pos.z;
+            if (pos.z > maxz) maxz = pos.z;
+        }
+
+
+
+        float avgDistx = (abs(minx) + abs(maxx)) * 0.5f;
+        float avgDistZ = (abs(minz) + abs(maxz)) * 0.5f;
+    
+
+        float distanceFromCenterY = (avgDistx + avgDistZ) * 0.5f;
+
         for (size_t i = 0; i < asteroidPositions.size(); i++)
         {
             // move asteroid toward 0 0 0
@@ -73,17 +94,13 @@ public:
             {
                 direction = glm::normalize(direction);
                 asteroidPositions[i] += direction * 0.05f;
-                if (i==0){
-                    std::cout << "asteroid position: " << asteroidPositions[i].x << ", " << asteroidPositions[i].y << ", " << asteroidPositions[i].z << std::endl;
-                }
-               asteroidPositions[i].y =
-                    terrain.terrainHeightAt(asteroidPositions[i]) + 0.5f*asteroidScales[i].x; // keep asteroid above terrain
+                asteroidPositions[i].y = terrain.terrainHeightAt(asteroidPositions[i]) + 0.5f * asteroidScales[i].x; // keep asteroid above terrain
 
                 // direction vers le centre
                 glm::vec3 toCenter = glm::normalize(-asteroidPositions[i]);
 
-                // rotation Y seulement + correction pi/2 
-                float angleY = atan2(toCenter.x, toCenter.z)-glm::radians(90.0f);
+                // rotation Y seulement + correction pi/2
+                float angleY = atan2(toCenter.x, toCenter.z) - glm::radians(90.0f);
 
                 // transform
                 glm::mat4 model(1.0f);
@@ -96,6 +113,12 @@ public:
                     glm::mat4(1.0f),
                     angleY,
                     glm::vec3(0.0f, 1.0f, 0.0f));
+
+
+
+                
+
+
 
                 // scale local
                 model *= glm::scale(

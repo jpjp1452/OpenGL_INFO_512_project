@@ -523,6 +523,27 @@ public:
         }
         objects.emplace(name, ObjectsData{obj, shader, {glm::mat4(1.0f)}});
     }
+    void removeOneObject(const std::string &name)
+    {
+        auto it = objects.find(name);
+        if (it == objects.end())
+        {
+            std::cout << "Object with name " << name << " doesn't exist" << std::endl;
+            return;
+        }
+        if (it->second.modelMatrices.size() >= 1)
+        {
+            it->second.modelMatrices.pop_back();
+        }
+        else
+        {
+            std::cout << "Emptying object data for " << name << std::endl;
+        }
+    }
+
+
+
+
 
     void drawObject(const std::string &name, uniformSetters &setters)
     {

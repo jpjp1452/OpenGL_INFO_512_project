@@ -39,33 +39,61 @@
 #endif
 
 
-const int SCREEN_WIDTH = 1280;
-const int SCREEN_HEIGHT = 720;
+const int SCREEN_WIDTH = 1920;
+const int SCREEN_HEIGHT = 1080;
 
 #include "terrainManager.h"
 #include "asteriodManager.hpp"
 
 #define SPEED_FACTOR 1.0f
 #define MouvementMultiplier 0.6f * SPEED_FACTOR
-#define RotationMultiplier 1.9f * SPEED_FACTOR
+#define RotationMultiplier 2.9f * SPEED_FACTOR
 #define JUMP_VELOCITY 0.2f * SPEED_FACTOR
+
+#define PROJECTILE_SPEED 1.5f * SPEED_FACTOR
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 float gravity = 0.1f;
 float verticalVelocity = 0.0f;
 bool freeFalling = false;
+bool shooting = false;
+float delayBetweenShots = 0.02f;
+float timeSinceLastShot =delayBetweenShots  +1.0f; 
+double mouseX;
+double mouseY;
+double lastMouseX;
+double lastMouseY;
 
-
+glm::vec3 fallingPosition = camera.Position;
 
 
 
 void processInput(GLFWwindow *window)
-{
+{   
+    lastMouseX = mouseX;
+    lastMouseY = mouseY;
+    glfwGetCursorPos(window, &mouseX, &mouseY);
+    float deltaX = mouseX - lastMouseX;
+    float deltaY = mouseY - lastMouseY;
+
+
+    //if left mouse button is pressed, set shooting to true, otherwise set it to false
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS &&  timeSinceLastShot >= delayBetweenShots){
+        shooting = true;
+    }
+    else{
+        shooting = false;
+    }
+
+
+
+  
 
 
     if ((glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) && !freeFalling)
     {
         verticalVelocity = JUMP_VELOCITY;
         freeFalling = true;
+        fallingPosition = camera.Position;
     }
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -79,15 +107,15 @@ void processInput(GLFWwindow *window)
         camera.ProcessKeyboardMovement(LEFT, 0.1f * MouvementMultiplier);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camera.ProcessKeyboardMovement(RIGHT, 0.1f * MouvementMultiplier);
-
-    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
-        camera.ProcessKeyboardRotation(0.0f, 1.0f, 0.1f * RotationMultiplier);
-    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
-        camera.ProcessKeyboardRotation(0.0f, -1.0f, 0.1f * RotationMultiplier);
-    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-        camera.ProcessKeyboardRotation(-1.0f, 0.0f, 0.1f * RotationMultiplier);
-    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-        camera.ProcessKeyboardRotation(1.0f, 0.0f, 0.1f * RotationMultiplier);
+    //key up or mouse moves up rotate camera up
+    if ((glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) || deltaY < 0)
+        camera.ProcessKeyboardRotation(0.0f, 1.0f, 0.1f * RotationMultiplier*abs(deltaY));
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS || deltaY > 0)
+        camera.ProcessKeyboardRotation(0.0f, -1.0f, 0.1f * RotationMultiplier*abs(deltaY));
+    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS || deltaX < 0)
+        camera.ProcessKeyboardRotation(-1.0f, 0.0f, 0.1f * RotationMultiplier*abs(deltaX));
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS || deltaX > 0)
+        camera.ProcessKeyboardRotation(1.0f, 0.0f, 0.1f * RotationMultiplier*abs(deltaX));
 }
 
 
@@ -98,7 +126,6 @@ void processInput(GLFWwindow *window)
 
 int main()
 {  
-
 /*
     int maxY = 512;
     int maxX = 512;
@@ -163,6 +190,7 @@ int main()
         return -1;
     }
 
+
     std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
     std::cout << "GLSL Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
 
@@ -201,9 +229,8 @@ int main()
     Shader sphereShader(PATH_TO_SHADERS "/sphere.vert", PATH_TO_SHADERS "/sphere.frag");
 
     size_t how_many_spheres = 1;
-    for (size_t i = 0; i < how_many_spheres; i++){
-        objectManager.addObject("sphere", PATH_TO_OBJECTS "/sphere.obj", sphereShader);
-    }
+    objectManager.addObject("sphere", PATH_TO_OBJECTS "/sphere.obj", sphereShader);
+    objectManager.removeOneObject("sphere");
 
 
 
@@ -221,7 +248,7 @@ int main()
     float maxTranslation = 5.5f;
     float maxScale = 1.5f;
     float minScale = 0.5f;
-    size_t numModelsTogenerate = 100;
+    size_t numModelsTogenerate = 10;
     for (size_t i = 0; i < numModelsTogenerate; i++)
     {
         objectManager.addObject("fish", PATH_TO_OBJECTS "/small_green_alien.obj", textureLightingShader);
@@ -305,6 +332,34 @@ int main()
     double lastTime = glfwGetTime();
     double now = lastTime;
     float inc = 0.0f;
+
+
+
+
+    shaderPaths = ShaderFilePaths();
+    shaderPaths.addVertexShader(PATH_TO_SHADERS "/hud.vert");
+    shaderPaths.addFragmentShader(PATH_TO_SHADERS "/hud.frag");
+    Shader hudShader(shaderPaths);
+    hudShader.use();
+    //set the texture uniform to 0
+
+    objectManager.addObject("hud", PATH_TO_OBJECTS "/weapon_quad.obj", hudShader);
+
+
+
+
+    glm::vec3 projectileDirection ;
+    glm::vec3 projectilePosition ;
+    std::vector<glm::vec3> projectileDirections;
+    std::vector<glm::vec3> projectilePositions;
+
+
+
+
+
+
+
+    int weaponAnimFrame = 0;
     while (!glfwWindowShouldClose(window))
     {   
         // Clear screen
@@ -317,17 +372,16 @@ int main()
 
         terrain.update(camera.Position);
         float heightUnderCamera = terrain.height_under_camera(camera.Position);
-        //other check
-        float heightAtCamera2 = terrain.terrainHeightAt(camera.Position);
+        //float heightAtCamera2 = terrain.terrainHeightAt(camera.Position);
 
-        std::cout << "height under camera: " << heightUnderCamera << " height at camera: " << heightAtCamera2 << std::endl;
-        std::cout << "camera position: " << camera.Position.x << ", " << camera.Position.y << ", " << camera.Position.z << std::endl;
+
 
         float minHeight = heightUnderCamera + 1.5f;
         if (freeFalling)
         {
             verticalVelocity -= gravity * (now - lastTime);
-            camera.Position.y += verticalVelocity;
+            fallingPosition.y += verticalVelocity;
+            camera.Position.y = fallingPosition.y;
             if (camera.Position.y < minHeight)
             {
                 camera.Position.y = minHeight;
@@ -346,6 +400,8 @@ int main()
 
         
         asteroidManager.update(data);
+
+
 
 
 
@@ -380,14 +436,74 @@ int main()
         sphereSetters.setVec3.push_back({"center", glm::vec3(0.0f, -0.5f, -8.0f)});
         sphereSetters.setVec3.push_back({"view_pos", camera.Position});
         objectManager.drawObject("fish", setters);
+
+
+
+        uniformSetters hudSetters;
+
+        if (shooting){
+            timeSinceLastShot = 0.0f;
+            weaponAnimFrame = 1;
+            shooting = false;
+            projectileDirection = camera.Front;
+            projectilePosition = camera.Position;
+            projectileDirections.push_back(projectileDirection);
+            projectilePositions.push_back(projectilePosition);
+            objectManager.addObject("sphere", PATH_TO_OBJECTS "/sphere.obj", sphereShader);
+
+
+
+
+        }
+        else{
+            timeSinceLastShot += now - lastTime;
+            if (timeSinceLastShot>= 0.1f){
+                weaponAnimFrame = 2;
+                if (timeSinceLastShot >= 0.2f){
+                    weaponAnimFrame = 3;
+                }
+                if (timeSinceLastShot >= 0.3f){
+                    weaponAnimFrame = 0;
+                }
+            }
+        }
+        for (size_t i = 0; i < projectilePositions.size(); i++){
+            float distance = glm::length(projectilePositions[i] - camera.Position);
+            float heightUnderProjectile = terrain.terrainHeightAt(projectilePositions[i]);
+            float dif = projectilePositions[i].y - heightUnderProjectile;
+            std::cout << "diff: " << dif << std::endl;
+
+
+            if (distance > 50.0f || projectilePositions[i].y < heightUnderProjectile){
+                projectilePositions.erase(projectilePositions.begin() + i);
+                projectileDirections.erase(projectileDirections.begin() + i);
+                i--;
+                objectManager.removeOneObject("sphere");
+            }
+            else{
+                projectilePositions[i] += projectileDirections[i] * PROJECTILE_SPEED;
+                projectilePositions[i].y -= gravity * (now - lastTime);
+            }
+        }
+
+        std::cout << "Number of projectiles: " << projectilePositions.size() << std::endl;
+        std::cout << "modelMatrices size: " << sphereData.modelMatrices.size() << std::endl;
+        for (size_t i = 0; i <sphereData.modelMatrices.size(); i++){
+            sphereData.modelMatrices[i] = glm::translate(glm::mat4(1.0f), projectilePositions[i]) * glm::scale(glm::mat4(1.0f), glm::vec3(0.02f));
+        }
+
+  
+
+        
         glDepthMask(GL_FALSE);
         objectManager.drawObject("sphere", sphereSetters);
         glDepthMask(GL_TRUE);
 
 
 
-        
 
+        hudSetters.setIntegers.push_back({"weaponFrame", weaponAnimFrame});
+        objectManager.drawObject("hud", hudSetters);
 
 
 
