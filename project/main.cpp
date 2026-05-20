@@ -44,6 +44,7 @@ const int SCREEN_HEIGHT = 1080;
 
 #include "terrainManager.h"
 #include "asteriodManager.hpp"
+#include "LSystem.hpp"
 
 #define SPEED_FACTOR 1.0f
 #define MouvementMultiplier 0.6f * SPEED_FACTOR
@@ -516,8 +517,27 @@ int main()
     
 
     
+    size_t iterations = 5;
+    std::vector<Rule> rules = {
+        {"X", "F[-*FX][-/FX][+*FX][+/FX]"}
+    };
+
+    std::string input = "X";
     
-    
+
+
+
+    ShaderFilePaths proceduralShaderPaths;
+    proceduralShaderPaths.addVertexShader(PATH_TO_SHADERS "/procedural.vert");
+    proceduralShaderPaths.addGeometryShader(PATH_TO_SHADERS "/procedural.geom");
+    proceduralShaderPaths.addFragmentShader(PATH_TO_SHADERS "/procedural.frag");
+    ProceduralObject proceduralObject(input, rules, iterations, {30.0f, 30.0f, 30.0f}, proceduralShaderPaths);
+
+
+
+
+
+
     
     
     int weaponAnimFrame = 0;
@@ -667,7 +687,7 @@ int main()
 
 
         // draw sun
-        objectManager.drawObject("sphere", sphereSetters);
+        //objectManager.drawObject("sphere", sphereSetters);
         // draw halo 
         glDisable(GL_CULL_FACE);
         glDepthMask(GL_FALSE);
@@ -738,14 +758,31 @@ int main()
         );
         glBindVertexArray(0); 
 
+
+        uniformSetters proceduralSetters;
+        proceduralSetters.setMat4.push_back({"V", view});
+        proceduralSetters.setMat4.push_back({"P", projection});
+        glm::mat4 proceduralModel = glm::mat4(1.0f);
+        //scale up the procedural model
+        proceduralModel = glm::scale(proceduralModel, glm::vec3(1.0f, 1.0f, 1.0f));
+        proceduralSetters.setMat4.push_back({"M", proceduralModel});
+        proceduralObject.draw(proceduralSetters);
+
+
         uniformSetters hudSetters;
         hudSetters.setIntegers.push_back({"weaponFrame", weaponAnimFrame});
         objectManager.drawObject("hud", hudSetters);
+
+
+
+
+
 
         fps(now);
         glfwSwapBuffers(window);
         glfwPollEvents();
         //sleep 0.1 seconds
+
 
     }
 
