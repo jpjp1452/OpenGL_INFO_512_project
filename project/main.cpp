@@ -179,7 +179,7 @@ int main()
 
 
 
-
+    glm::vec3 sunPosition = glm::vec3(0.0f, 50.0f, 0.0f);
     std::cout << "Initializing OpenGL Application..." << std::endl;
 
     // Initialize GLFW
@@ -236,14 +236,14 @@ int main()
 
 
     textureLightingShader.use();
-    textureLightingShader.setFloat("shininess", 32.0f);
-    textureLightingShader.setFloat("light.ambient_strength", 0.1f);
-    textureLightingShader.setFloat("light.diffuse_strength", 1.8f);
-    textureLightingShader.setFloat("light.specular_strength", 1.0f);
+    textureLightingShader.setFloat("shininess", 64.0f);
+    textureLightingShader.setFloat("light.ambient_strength", 0.25f);
+    textureLightingShader.setFloat("light.diffuse_strength", 1.2f);
+    textureLightingShader.setFloat("light.specular_strength", 0.35f);
     textureLightingShader.setFloat("light.constant", 1.0f);
-    textureLightingShader.setFloat("light.linear", 0.14f);
-    textureLightingShader.setFloat("light.quadratic", 0.07f);
-    textureLightingShader.setVector3f("light.light_pos", glm::vec3(0.0f, 0.0f, 0.0f));
+    textureLightingShader.setFloat("light.linear", 0.0f);
+    textureLightingShader.setFloat("light.quadratic", 0.0f);
+    textureLightingShader.setVector3f("light.light_pos", sunPosition);
 
     Shader textureShader(PATH_TO_SHADERS "/texture.vert", PATH_TO_SHADERS "/texture.frag");
 
@@ -312,7 +312,6 @@ int main()
     ObjectsData &projectileData = objectManager.objects.at("projectile");
 
     ObjectsData &sphereData = objectManager.objects.at("sphere");
-    glm::vec3 sunPosition = glm::vec3(50.0f, 20.0f, -50.0f);
 
 
     sphereData.modelMatrices[0] = glm::translate(glm::mat4(1.0f), sunPosition);
@@ -555,7 +554,7 @@ int main()
         {
             camera.Position.y = minHeight;
         }
-        terrain.draw(view, projection, camera.Position, glm::vec3(0.0f, 100.0f, 0.0f));
+        terrain.draw(view, projection, camera.Position, sunPosition);
 
 
         inc += 0.01f;

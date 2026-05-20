@@ -70,13 +70,15 @@ void main()
     float dXHigh = highR - highL;
     float dYHigh = highU - highD;
 
-    float heightScale = 10000.0;
-    float dX = mix(dXLow, dXHigh, blend) * heightScale;
-    float dY = mix(dYLow, dYHigh, blend) * heightScale;
+    float bumpScale = 5.0; 
+    float dX = mix(dXLow, dXHigh, blend) * bumpScale;
+    float dY = mix(dYLow, dYHigh, blend) * bumpScale;
 
     vec3 n = normalize(frag_in.normal);
-    vec3 t = (abs(n.y) < 0.999) ? normalize(cross(vec3(0.0, 1.0, 0.0), n)) : vec3(1.0, 0.0, 0.0);
+    vec3 t = vec3(1.0, 0.0, 0.0);
+    t = normalize(t - dot(t, n) * n);
     vec3 b = normalize(cross(n, t));
+    
     vec3 bumpedNormal = normalize(n - dX * t - dY * b);
 
     vec3 toLight = lightPos - frag_in.pos;
