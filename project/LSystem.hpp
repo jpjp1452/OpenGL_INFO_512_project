@@ -18,6 +18,35 @@ struct Rule
     std::string to;
 };
 
+struct RotationXYZ
+{
+    float x;
+    float y;
+    float z;
+};
+struct DecreasingFactors
+{
+    float growing;
+    float branching;
+};
+
+struct GrowingFactors // not really needed since we can just scale
+{
+    float x;
+    float y;
+    float z;
+};
+
+struct ProceduralParameters
+{
+    std::string inputString;
+    std::vector<Rule> rules;
+    size_t iterations;
+    RotationXYZ angles;
+    GrowingFactors growingFactors;
+    DecreasingFactors decreaseFactors;
+};
+
 void replace(std::string &input, const std::string &from, const std::string &to)
 {
     if (from.empty())
@@ -70,9 +99,7 @@ struct Segment
     float prevFactor;
 };
 
-struct state
-{
-};
+
 
 // + - rotation towards x axis
 // * / rotation towards y axis
@@ -90,20 +117,14 @@ void rotateDirectionToZ(glm::vec3 &direction, float angle)
     direction = glm::rotateZ(direction, glm::radians(angle));
 }
 
-struct Angle
-{
-    float x;
-    float y;
-    float z;
-};
-struct decreasingFactors
-{
-    float growing;
-    float branching;
-};
 
 
-size_t convertToSegmentsHelper(const std::string &lSystemString, std::vector<Segment> &segments, Angle angles, size_t startAt, float factor,decreasingFactors decreaseFactor, Segment branchingSegment, glm::vec3 currentDirection)
+
+
+
+
+
+size_t convertToSegmentsHelper(const std::string &lSystemString, std::vector<Segment> &segments,GrowingFactors& growingFactors,DecreasingFactors& decreaseFactor,RotationXYZ& angles, size_t startAt, float factor, Segment branchingSegment, glm::vec3 currentDirection)
 {
     float currentFactor = factor;
     for (size_t i = startAt; i < lSystemString.length(); i++)
@@ -115,7 +136,8 @@ size_t convertToSegmentsHelper(const std::string &lSystemString, std::vector<Seg
             newSegment.prevStart = branchingSegment.start;
             newSegment.start = branchingSegment.end;
 
-            glm::vec3 growth = currentDirection * (currentFactor*4.0f);
+            glm::vec3 growth(currentDirection.x * growingFactors.x, currentDirection.y * growingFactors.y, currentDirection.z * growingFactors.z);
+            //growth *= currentFactor;
             newSegment.end = branchingSegment.end + growth;
             newSegment.prevFactor = branchingSegment.factor;
             currentFactor *= decreaseFactor.growing;
@@ -150,7 +172,7 @@ size_t convertToSegmentsHelper(const std::string &lSystemString, std::vector<Seg
         else if (c == '[')
         {
             size_t newStartAt = i + 1;
-            i = convertToSegmentsHelper(lSystemString, segments, angles, newStartAt, currentFactor*decreaseFactor.branching, decreaseFactor, branchingSegment, currentDirection);
+            i = convertToSegmentsHelper(lSystemString, segments, growingFactors, decreaseFactor, angles, newStartAt, currentFactor*decreaseFactor.branching, branchingSegment, currentDirection);
         }
         else if (c == ']')
         {
@@ -160,7 +182,7 @@ size_t convertToSegmentsHelper(const std::string &lSystemString, std::vector<Seg
     return lSystemString.length() - 1;
 }
 
-std::vector<Segment> convertToSegments(const std::string &lSystemString, float angleX, float angleY, float angleZ)
+std::vector<Segment> convertToSegments(const std::string &lSystemString, DecreasingFactors& decreaseFactor, RotationXYZ& angles, GrowingFactors& growingFactors)
 {
     int openBrackets = 0;
     std::vector<Segment> segments;
@@ -170,14 +192,7 @@ std::vector<Segment> convertToSegments(const std::string &lSystemString, float a
     baseSegment.factor = 1.0f;
     baseSegment.prevFactor = 1.0f;
     segments.push_back(baseSegment);
-    Angle angles;
-    angles.x = angleX;
-    angles.y = angleY;
-    angles.z = angleZ;
-    decreasingFactors decreaseFactor;
-    decreaseFactor.growing = 0.99f;
-    decreaseFactor.branching = 0.80f;
-    convertToSegmentsHelper(lSystemString, segments, angles, 0,1.0f, decreaseFactor, baseSegment, glm::vec3(0.0f, 1.0f, 0.0f));
+    convertToSegmentsHelper(lSystemString, segments, growingFactors, decreaseFactor, angles, 0,1.0f,baseSegment, glm::vec3(0.0f, 1.0f, 0.0f));
     return segments;
 }
 
@@ -186,15 +201,12 @@ class ProceduralObject
 public:
     std::vector<Segment> segments;
     GLuint VAO, VBO;
-    Shader shader;
+    Shader& shader;
 
-    ProceduralObject(std::string inputString, std::vector<Rule> rules, size_t iterations, Angle angles, ShaderFilePaths shaderPath)
+    ProceduralObject(ProceduralParameters params, Shader& shaderPath): shader(shaderPath)
     {
-        std::string output = applyRules(inputString, rules, iterations);
-        segments = convertToSegments(output, angles.x, angles.y, angles.z);
-        std::cout << "compiling shader" << std::endl;
-        shader = Shader(shaderPath);
-
+        std::string output = applyRules(params.inputString, params.rules, params.iterations);
+        segments = convertToSegments(output, params.decreaseFactors, params.angles, params.growingFactors);
         std::cout << "ProceduralObject initialized with " << segments.size() << " segments." << std::endl;
         if (segments.size() > 0) {
             std::cout << "Segment 0 start: " << segments[0].start.x << "," << segments[0].start.y << "," << segments[0].start.z << std::endl;

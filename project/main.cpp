@@ -517,7 +517,7 @@ int main()
     
 
     
-    size_t iterations = 5;
+    size_t iterations = 3;
     std::vector<Rule> rules = {
         {"X", "F[-*FX][-/FX][+*FX][+/FX]"}
     };
@@ -526,12 +526,22 @@ int main()
     
 
 
-
     ShaderFilePaths proceduralShaderPaths;
     proceduralShaderPaths.addVertexShader(PATH_TO_SHADERS "/procedural.vert");
     proceduralShaderPaths.addGeometryShader(PATH_TO_SHADERS "/procedural.geom");
     proceduralShaderPaths.addFragmentShader(PATH_TO_SHADERS "/procedural.frag");
-    ProceduralObject proceduralObject(input, rules, iterations, {30.0f, 30.0f, 30.0f}, proceduralShaderPaths);
+    Shader proceduralShader(proceduralShaderPaths);
+
+    ProceduralParameters params;
+    params.angles = {30.0f, 30.0f, 30.0f};
+    params.growingFactors = {4.0f, 4.0f, 4.0f};
+    params.decreaseFactors = {0.99f, 0.80f};
+    params.iterations = iterations;
+    params.rules = rules;
+    params.inputString = input;
+
+
+    ProceduralObject proceduralObject(params, proceduralShader);
 
 
 

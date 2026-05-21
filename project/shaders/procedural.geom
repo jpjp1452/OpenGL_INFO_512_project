@@ -21,7 +21,7 @@ out vec3 fragColor;
 out float factor;
 const int SIDES = 8;
 
-void emitVertex(vec3 p)
+void emitVertex(vec3 p, float colorFactor)
 {
     gl_Position =
         P *
@@ -29,7 +29,14 @@ void emitVertex(vec3 p)
         M *
         vec4(p, 1.0);
 
-    fragColor = vec3(0.4, 0.2, 0.1);
+
+
+    vec4 brownColor = vec4(0.55, 0.27, 0.07, 1.0);
+    vec4 greenColor = vec4(0.0, 0.5, 0.0, 1.0);
+
+    vec4 finalColor = mix( greenColor,brownColor, colorFactor);
+
+    fragColor = vec3(finalColor.r, finalColor.g, finalColor.b);
     factor = gs_in[0].factor;
 
     EmitVertex();
@@ -71,18 +78,29 @@ void main()
             right * cos(angle) * radiusB +
             up    * sin(angle) * radiusB;
         float smallerFactor = 0.6;
-        if (factor < smallerFactor)
+        float amplicatationA = (gs_in[0].prevFactor/smallerFactor)+4.0;
+        float amplicatationB = (gs_in[0].factor/smallerFactor)+4.0;
+        
+        if (gs_in[0].prevFactor < smallerFactor)
         {
-            offsetA.x *= (factor/smallerFactor)+4.0;
-            offsetB.x *= (factor/smallerFactor)+4.0;
-            offsetA.y *= (factor/smallerFactor)+4.0;
-            offsetB.y *= (factor/smallerFactor)+4.0;
-            offsetA.z *= 1.1-(factor/smallerFactor);
-            offsetB.z *= 1.1-(factor/smallerFactor);
+            //offsetA.x *= (gs_in[0].prevFactor/smallerFactor)+4.0;
+            //offsetA.y *= (gs_in[0].prevFactor/smallerFactor)+4.0;
+            //offsetA.z *= 1.1-(gs_in[0].prevFactor/smallerFactor);
+            offsetA = right * cos(angle) * radiusA * amplicatationA + up * sin(angle) *radiusA / amplicatationA;
+
+            
+        }
+        
+        if (gs_in[0].factor < smallerFactor)
+        {
+            //offsetB.x *= (gs_in[0].factor/smallerFactor)+4.0;
+            //offsetB.y *= (gs_in[0].factor/smallerFactor)+4.0;
+            //offsetB.z *= 1.1-(gs_in[0].factor/smallerFactor);
+            offsetB = right * cos(angle) * radiusB * amplicatationB + up * sin(angle) * radiusB/ amplicatationB;
         }
 
-        emitVertex(A + offsetA);
-        emitVertex(B + offsetB);
+        emitVertex(A + offsetA, gs_in[0].prevFactor);
+        emitVertex(B + offsetB, gs_in[0].factor);
     }
 
     EndPrimitive();
