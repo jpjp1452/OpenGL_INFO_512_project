@@ -188,7 +188,7 @@ std::vector<Segment> convertToSegments(const std::string &lSystemString, Decreas
     std::vector<Segment> segments;
     Segment baseSegment;
     baseSegment.start = glm::vec3(0.0f, 0.0f, 0.0f);
-    baseSegment.end = glm::vec3(0.0f, 1.0f, 0.0f);
+    baseSegment.end = glm::vec3(0.0f, 0.0f, 0.0f);
     baseSegment.factor = 1.0f;
     baseSegment.prevFactor = 1.0f;
     segments.push_back(baseSegment);
@@ -201,9 +201,10 @@ class ProceduralObject
 public:
     std::vector<Segment> segments;
     GLuint VAO, VBO;
+    GLuint textureID1, textureID2;
     Shader& shader;
 
-    ProceduralObject(ProceduralParameters params, Shader& shaderPath): shader(shaderPath)
+    ProceduralObject(ProceduralParameters params, Shader& shaderPath,std::string tex1, std::string tex2): shader(shaderPath), textureID1(0), textureID2(0)
     {
         std::string output = applyRules(params.inputString, params.rules, params.iterations);
         segments = convertToSegments(output, params.decreaseFactors, params.angles, params.growingFactors);
@@ -251,6 +252,49 @@ public:
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
+
+        // Load textures 1 and 2
+        unsigned int width, height;
+        unsigned char* data;
+        if (!tex1.empty()) {
+            data = stbi_load(tex1.c_str(), (int*)&width, (int*)&height, 0, 3);
+            if (data) {
+                glGenTextures(1, &textureID1);
+                glBindTexture(GL_TEXTURE_2D, textureID1);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+                glGenerateMipmap(GL_TEXTURE_2D);
+                stbi_image_free(data);
+            }
+            else {
+                std::cout << "Failed to load texture: " << tex1 << std::endl;
+            }
+        }
+        if (!tex2.empty()) {
+            data = stbi_load(tex2.c_str(), (int*)&width, (int*)&height, 0, 3);
+            if (data) {
+                glGenTextures(1, &textureID2);
+                glBindTexture(GL_TEXTURE_2D, textureID2);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+                glGenerateMipmap(GL_TEXTURE_2D);
+                stbi_image_free(data);
+            }
+            else {
+                std::cout << "Failed to load texture: " << tex2 << std::endl;
+            }
+        }
+            
+
+
+
+
     }
     void draw(uniformSetters setters)
     {
@@ -272,9 +316,20 @@ public:
             shader.setMatrix4(setter.first.c_str(), setter.second);
         }
 
+        shader.setInteger("texture1", 0);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, textureID1);
+        shader.setInteger("texture2", 1);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, textureID2);
         glBindVertexArray(VAO);
         glDrawArrays(GL_POINTS, 0, segments.size());
         glBindVertexArray(0);
+        // Unbind textures
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, 0);
 
 
     }

@@ -519,13 +519,15 @@ int main()
     
     size_t iterations = 3;
     std::vector<Rule> rules = {
-        {"X", "F[-*FX][-/FX][+*FX][+/FX]"}
+        {"X", "F[-**FX][--/FX][+*FX][+/F+X]"}
     };
 
     std::string input = "X";
     
 
-
+    std::string barkTexture= PATH_TO_TEXTURE "/bark.png";
+    std::string leafTexture= PATH_TO_TEXTURE "/foliageTree.png";
+    
     ShaderFilePaths proceduralShaderPaths;
     proceduralShaderPaths.addVertexShader(PATH_TO_SHADERS "/procedural.vert");
     proceduralShaderPaths.addGeometryShader(PATH_TO_SHADERS "/procedural.geom");
@@ -535,13 +537,13 @@ int main()
     ProceduralParameters params;
     params.angles = {30.0f, 30.0f, 30.0f};
     params.growingFactors = {4.0f, 4.0f, 4.0f};
-    params.decreaseFactors = {0.99f, 0.80f};
+    params.decreaseFactors = {0.95f, 0.80f};
     params.iterations = iterations;
     params.rules = rules;
     params.inputString = input;
 
 
-    ProceduralObject proceduralObject(params, proceduralShader);
+    ProceduralObject proceduralObject(params, proceduralShader, barkTexture, leafTexture);
 
 
 
@@ -776,6 +778,8 @@ int main()
         //scale up the procedural model
         proceduralModel = glm::scale(proceduralModel, glm::vec3(1.0f, 1.0f, 1.0f));
         proceduralSetters.setMat4.push_back({"M", proceduralModel});
+        proceduralSetters.setFloats.push_back({"leafStartFactor", 0.5f});
+        proceduralSetters.setFloats.push_back({"leafAmplification", 4.5f});
         proceduralObject.draw(proceduralSetters);
 
 

@@ -8,6 +8,9 @@ uniform mat4 M;
 uniform mat4 V;
 uniform mat4 P;
 
+uniform float leafStartFactor;
+uniform float leafAmplification;
+
 in VS_OUT
 {
     vec3 prevStart;
@@ -20,8 +23,9 @@ in VS_OUT
 out vec3 fragColor;
 out float factor;
 const int SIDES = 8;
+out vec2 v_uv;
 
-void emitVertex(vec3 p, float colorFactor)
+void emitVertex(vec3 p, float colorFactor, vec2 uv)
 {
     gl_Position =
         P *
@@ -39,6 +43,7 @@ void emitVertex(vec3 p, float colorFactor)
     fragColor = vec3(finalColor.r, finalColor.g, finalColor.b);
     factor = gs_in[0].factor;
 
+    v_uv = uv;
     EmitVertex();
 }
 
@@ -64,7 +69,10 @@ void main()
         normalize(cross(right, dir));
 
     for(int i = 0; i <= SIDES; i++)
-    {
+    {   
+
+        float u = float(i) / float(SIDES);
+
         float angle =
             2.0 * 3.141592 *
             float(i) /
@@ -78,29 +86,24 @@ void main()
             right * cos(angle) * radiusB +
             up    * sin(angle) * radiusB;
         float smallerFactor = 0.6;
-        float amplicatationA = (gs_in[0].prevFactor/smallerFactor)+4.0;
-        float amplicatationB = (gs_in[0].factor/smallerFactor)+4.0;
-        
-        if (gs_in[0].prevFactor < smallerFactor)
+        float amplificationA = (gs_in[0].prevFactor/leafStartFactor)+leafAmplification;
+        float amplificationB = (gs_in[0].factor/leafStartFactor)+leafAmplification;
+        vec2 uvA = vec2(u, 0.0);
+        vec2 uvB = vec2(u, 1.0);
+        if (gs_in[0].prevFactor < leafStartFactor)
         {
-            //offsetA.x *= (gs_in[0].prevFactor/smallerFactor)+4.0;
-            //offsetA.y *= (gs_in[0].prevFactor/smallerFactor)+4.0;
-            //offsetA.z *= 1.1-(gs_in[0].prevFactor/smallerFactor);
-            offsetA = right * cos(angle) * radiusA * amplicatationA + up * sin(angle) *radiusA / amplicatationA;
-
-            
+            offsetA = right * cos(angle) * radiusA * amplificationA + up * sin(angle) *radiusA / amplificationA;
+            uvA = vec2(u/amplificationA, 0.0);
         }
         
-        if (gs_in[0].factor < smallerFactor)
+        if (gs_in[0].factor < leafStartFactor)
         {
-            //offsetB.x *= (gs_in[0].factor/smallerFactor)+4.0;
-            //offsetB.y *= (gs_in[0].factor/smallerFactor)+4.0;
-            //offsetB.z *= 1.1-(gs_in[0].factor/smallerFactor);
-            offsetB = right * cos(angle) * radiusB * amplicatationB + up * sin(angle) * radiusB/ amplicatationB;
+            offsetB = right * cos(angle) * radiusB * amplificationB + up * sin(angle) * radiusB/ amplificationB;
+            uvB = vec2(u/amplificationB, 1.0);
         }
 
-        emitVertex(A + offsetA, gs_in[0].prevFactor);
-        emitVertex(B + offsetB, gs_in[0].factor);
+        emitVertex(A + offsetA, gs_in[0].prevFactor, vec2(u , 0.0));
+        emitVertex(B + offsetB, gs_in[0].factor, vec2(u , 1.0));
     }
 
     EndPrimitive();
