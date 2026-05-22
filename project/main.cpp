@@ -253,17 +253,13 @@ int main()
     objectManager.addObject("sphere", PATH_TO_OBJECTS "/sphere.obj", sphereShader);
     objectManager.addObject("sunHalo", PATH_TO_OBJECTS "/sphere.obj", sphereShader);
 
+    Shader planetShader(PATH_TO_SHADERS "/planet.vert", PATH_TO_SHADERS "/planet.frag");
+    objectManager.addObject("planet", PATH_TO_OBJECTS "/planet.obj", planetShader);
 
 
     Shader projectileShader(PATH_TO_SHADERS "/projectile.vert", PATH_TO_SHADERS "/projectile.frag");
     objectManager.addObject("projectile", PATH_TO_OBJECTS "/sphere.obj", projectileShader);
     objectManager.removeOneObject("projectile");
-
-
-
-
-
-
 
 
 
@@ -322,7 +318,12 @@ int main()
     ObjectsData &sunHaloData = objectManager.objects.at("sunHalo");
     sunHaloData.modelMatrices[0] = glm::translate(glm::mat4(1.0f), sunPosition);
     sunHaloData.modelMatrices[0] = glm::scale(sunHaloData.modelMatrices[0], glm::vec3(1.0f, 1.0f, 1.0f));
-    
+
+	// Set up Planet
+    ObjectsData& planetData = objectManager.objects.at("planet");
+    glm::vec3 planetPosition = glm::vec3(25.0f, 25.0f, -25.0f);
+    planetData.modelMatrices[0] = glm::translate(glm::mat4(1.0f), glm::vec3(25.0f, 25.0f, -25.0f));
+    planetData.modelMatrices[0] = glm::scale(planetData.modelMatrices[0], glm::vec3(0.8f, 0.8f, 0.8f));
 
     ObjectsData& refSphereData = objectManager.objects.at("reflectiveSphere");
 	refSphereData.modelMatrices[0] = glm::translate(refSphereData.modelMatrices[0], glm::vec3(20.0f, 1.0f, 20.0f));
@@ -331,8 +332,8 @@ int main()
 
     unsigned int asteroidAmount = 1000;
     srand(glfwGetTime()); // initialize random seed	
-    float radius = 75.0;
-    float offset = 15.0f;
+    float radius = 15.0;
+    float offset = 5.0f;
     for (unsigned int i = 0; i < asteroidAmount; i++) {
         objectManager.addObject("asteroid", PATH_TO_OBJECTS "/rock.obj", asteroidShader);
         ObjectsData& asteroidData = objectManager.objects.at("asteroid");
@@ -346,7 +347,7 @@ int main()
         float y = displacement * 0.4f; // keep height of field smaller compared to width of x and z
         displacement = (rand() % (int)(2 * offset * 100)) / 100.0f - offset;
         float z = cos(angle) * radius + displacement;
-        asteroidModel = glm::translate(asteroidModel, glm::vec3(x, y, z));
+        asteroidModel = glm::translate(asteroidModel, (glm::vec3(x, y, z) + planetPosition));
 
         // 2. scale: scale between 0.05 and 0.25f
         float scale = (rand() % 20) / 100.0f + 0.05;
@@ -563,40 +564,17 @@ int main()
         
         asteroidManager.update(dataFish);
 
-
-
-
-
-
-        // Use shader and set uniforms
-        shader.use();
-        shader.setMatrix4("M", model);
-        shader.setMatrix4("V", view);
-        shader.setMatrix4("P", projection);
-
-        // Render triangle
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
         lastTime = now;
         now = glfwGetTime();
 
-
-
-        uniformSetters projectileSetters;
-        //base color is blue
-        projectileSetters.setVec3.push_back({"baseColor", glm::vec3(0.88f, 0.88f, 0.18f)});
-        projectileSetters.setFloats.push_back({"time", now});
-        projectileSetters.setMat4.push_back({"V", view});
-        projectileSetters.setMat4.push_back({"P", projection});
-        projectileSetters.setVec3.push_back({"center", glm::vec3(0.0f, -0.5f, -8.0f)});
-        projectileSetters.setVec3.push_back({"view_pos", camera.Position});
         uniformSetters setters;
         setters.setFloats.push_back({"time", now});
         setters.setMat4.push_back({"V", view});
         setters.setMat4.push_back({"P", projection});
         setters.setVec3.push_back({"u_view_pos", camera.Position});
-  
         objectManager.drawObject("fish", setters);
+
+        // draw sun
         uniformSetters sphereSetters;
         sphereSetters.setVec3.push_back({ "baseColor", glm::vec3(1.0f, 0.12f, 0.03f) });
         sphereSetters.setFloats.push_back({ "time", now });
@@ -605,7 +583,9 @@ int main()
         sphereSetters.setVec3.push_back({ "view_pos", camera.Position });
         sphereSetters.setIntegers.push_back({ "isHalo", 0 });
         sphereSetters.setFloats.push_back({ "haloIntensity", 0.0f });
+        objectManager.drawObject("sphere", sphereSetters);
 
+        // draw halo 
         uniformSetters haloSetters;
         haloSetters.setVec3.push_back({ "baseColor", glm::vec3(1.0f, 0.18f, 0.05f) });
         haloSetters.setFloats.push_back({ "time", now });
@@ -614,8 +594,85 @@ int main()
         haloSetters.setVec3.push_back({ "view_pos", camera.Position });
         haloSetters.setIntegers.push_back({ "isHalo", 1 });
         haloSetters.setFloats.push_back({ "haloIntensity", 1.35f });
- 
 
+        glDisable(GL_CULL_FACE);
+        glDepthMask(GL_FALSE);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+        objectManager.drawObject("sunHalo", haloSetters);
+
+        // restore default states after drawing halo
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_TRUE);
+        glEnable(GL_CULL_FACE);
+
+
+        // draw planet
+        uniformSetters planetSetters;
+        planetSetters.setFloats.push_back({ "time", now });
+        planetSetters.setMat4.push_back({ "V", view });
+        planetSetters.setMat4.push_back({ "P", projection });
+        planetSetters.setVec3.push_back({ "u_view_pos", camera.Position });
+        planetSetters.setVec3.push_back({ "light.light_pos", sunPosition });
+        planetSetters.setIntegers.push_back({ "planetTexture", 0 });
+
+        objectManager.drawObject("planet", planetSetters);
+
+
+        // Draw cubMap
+        glDepthFunc(GL_LEQUAL);
+        glDisable(GL_CULL_FACE);
+
+        uniformSetters cubeMapSetters;
+        cubeMapSetters.setMat4.push_back({ "V", view });
+        cubeMapSetters.setMat4.push_back({ "P", projection });
+        cubeMapSetters.setIntegers.push_back({ "cubeMapTexture", 0 });
+        objectManager.drawObject("cubeMap", cubeMapSetters);
+
+        // Resore default states
+        glEnable(GL_CULL_FACE);
+        glDepthFunc(GL_LESS);
+
+        // Draw reflective sphere
+        auto delta = light_pos + glm::vec3(0.0, 0.0, 2 * std::sin(now));
+
+        uniformSetters reflectiveSetters;
+        reflectiveSetters.setMat4.push_back({ "M", model });
+        reflectiveSetters.setMat4.push_back({ "itM", inverseModel });
+        reflectiveSetters.setMat4.push_back({ "V", view });
+        reflectiveSetters.setMat4.push_back({ "P", projection });
+        reflectiveSetters.setVec3.push_back({ "u_view_pos", camera.Position });
+        reflectiveSetters.setVec3.push_back({ "light.light_pos", delta });
+        objectManager.drawObject("reflectiveSphere", reflectiveSetters);
+
+        // Draw asteroids
+        asteroidShader.use();
+        asteroidShader.setMatrix4("V", view);
+        asteroidShader.setMatrix4("P", projection);
+        asteroidShader.setInteger("useTexture", 1);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, asteroidData.object.textureID);
+
+        glBindVertexArray(asteroidData.object.VAO);
+        glDrawElementsInstanced(
+            GL_TRIANGLES,
+            static_cast<GLsizei>(asteroidData.object.indices.size()),
+            GL_UNSIGNED_INT,
+            0,
+            asteroidAmount
+        );
+        glBindVertexArray(0);
+
+
+        uniformSetters projectileSetters;
+        projectileSetters.setVec3.push_back({ "baseColor", glm::vec3(0.88f, 0.88f, 0.18f) });
+        projectileSetters.setFloats.push_back({ "time", now });
+        projectileSetters.setMat4.push_back({ "V", view });
+        projectileSetters.setMat4.push_back({ "P", projection });
+        projectileSetters.setVec3.push_back({ "center", glm::vec3(0.0f, -0.5f, -8.0f) });
+        projectileSetters.setVec3.push_back({ "view_pos", camera.Position });
+ 
         if (shooting){
             timeSinceLastShot = 0.0f;
             weaponAnimFrame = 1;
@@ -664,80 +721,6 @@ int main()
             projectileData.modelMatrices[i] = glm::translate(glm::mat4(1.0f), projectilePositions[i]) * glm::scale(glm::mat4(1.0f), glm::vec3(0.02f));
         }
         objectManager.drawObject("projectile", projectileSetters);
-
-
-
-        // draw sun
-        objectManager.drawObject("sphere", sphereSetters);
-        // draw halo 
-        glDisable(GL_CULL_FACE);
-        glDepthMask(GL_FALSE);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
-
-        objectManager.drawObject("sunHalo", haloSetters);
-
-		// default states restauration
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        glDepthMask(GL_TRUE);
-        glEnable(GL_CULL_FACE);
-
-
-
-   
-
-
-
-
-		// Draw cubMap
-		glDepthFunc(GL_LEQUAL);     // Accepte une profondeur de 1.0
-		glDisable(GL_CULL_FACE);    // D�sactive le culling car la cam�ra est � l'int�rieur du cube
-
-		cubeMapShader.use();
-		cubeMapShader.setMatrix4("V", view);
-		cubeMapShader.setMatrix4("P", projection);
-		cubeMapShader.setInteger("cubemapTexture", 0);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMapTexture);
-        uniformSetters cubeMapSetters;
-		objectManager.drawObject("cubeMap", cubeMapSetters);
-
-		// On restaure les �tats par d�faut
-		glEnable(GL_CULL_FACE);
-		glDepthFunc(GL_LESS);
-
-		// Draw reflective sphere
-        reflexionShader.use();
-
-        reflexionShader.setMatrix4("M", model);
-        reflexionShader.setMatrix4("itM", inverseModel);
-        reflexionShader.setMatrix4("V", view);
-        reflexionShader.setMatrix4("P", projection);
-        reflexionShader.setVector3f("u_view_pos", camera.Position);
-
-        auto delta = light_pos + glm::vec3(0.0, 0.0, 2 * std::sin(now));
-        shader.setVector3f("light.light_pos", delta);
-        uniformSetters reflectiveSetters;
-
-		objectManager.drawObject("reflectiveSphere", reflectiveSetters);
-
-		// Draw asteroids
-        asteroidShader.use();
-        asteroidShader.setMatrix4("V", view);
-        asteroidShader.setMatrix4("P", projection);
-        asteroidShader.setInteger("useTexture", 1);
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, asteroidData.object.textureID);
-
-        glBindVertexArray(asteroidData.object.VAO);
-        glDrawElementsInstanced(
-            GL_TRIANGLES,
-            static_cast<GLsizei>(asteroidData.object.indices.size()),
-            GL_UNSIGNED_INT,
-            0,
-            asteroidAmount
-        );
-        glBindVertexArray(0); 
 
         uniformSetters hudSetters;
         hudSetters.setIntegers.push_back({"weaponFrame", weaponAnimFrame});
