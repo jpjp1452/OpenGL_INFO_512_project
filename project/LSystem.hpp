@@ -187,11 +187,11 @@ std::vector<Segment> convertToSegments(const std::string &lSystemString, Decreas
     int openBrackets = 0;
     std::vector<Segment> segments;
     Segment baseSegment;
-    baseSegment.start = glm::vec3(0.0f, 0.0f, 0.0f);
+    baseSegment.prevStart = glm::vec3(0.0f, -2.0f, 0.0f);
+    baseSegment.start = glm::vec3(0.0f, -1.0f, 0.0f);
     baseSegment.end = glm::vec3(0.0f, 0.0f, 0.0f);
     baseSegment.factor = 1.0f;
     baseSegment.prevFactor = 1.0f;
-    segments.push_back(baseSegment);
     convertToSegmentsHelper(lSystemString, segments, growingFactors, decreaseFactor, angles, 0,1.0f,baseSegment, glm::vec3(0.0f, 1.0f, 0.0f));
     return segments;
 }

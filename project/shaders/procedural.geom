@@ -2,7 +2,7 @@
 
 layout(points) in;
 
-layout(triangle_strip, max_vertices = 64) out;
+layout(triangle_strip, max_vertices = 36) out;
 
 uniform mat4 M;
 uniform mat4 V;
@@ -22,7 +22,7 @@ in VS_OUT
 
 out vec3 fragColor;
 out float factor;
-const int SIDES = 8;
+const int SIDES = 6;
 out vec2 v_uv;
 
 void emitVertex(vec3 p, float colorFactor, vec2 uv)
@@ -49,6 +49,7 @@ void emitVertex(vec3 p, float colorFactor, vec2 uv)
 
 void main()
 {
+    vec3 prevA = gs_in[0].prevStart;
     vec3 A = gs_in[0].start;
     vec3 B = gs_in[0].end;
 
@@ -68,6 +69,17 @@ void main()
     vec3 up =
         normalize(cross(right, dir));
 
+
+    vec3 dirPrev = normalize(A - prevA);
+    vec3 arbitraryPrev = up;
+    if(abs(dot(arbitraryPrev, dirPrev)) > 0.99)
+        arbitraryPrev = right;
+    vec3 rightPrev = normalize(cross(dirPrev, arbitraryPrev));
+    vec3 upPrev = normalize(cross(rightPrev, dirPrev));
+
+
+
+
     for(int i = 0; i <= SIDES; i++)
     {   
 
@@ -79,8 +91,8 @@ void main()
             float(SIDES);
 
         vec3 offsetA =
-            right * cos(angle) * radiusA +
-            up    * sin(angle) * radiusA;
+            rightPrev * cos(angle) * radiusA +
+            upPrev    * sin(angle) * radiusA;
 
         vec3 offsetB =
             right * cos(angle) * radiusB +
@@ -92,7 +104,7 @@ void main()
         vec2 uvB = vec2(u, 1.0);
         if (gs_in[0].prevFactor < leafStartFactor)
         {
-            offsetA = right * cos(angle) * radiusA * amplificationA + up * sin(angle) *radiusA / amplificationA;
+            offsetA = rightPrev * cos(angle) * radiusA * amplificationA + upPrev * sin(angle) *radiusA / amplificationA;
             uvA = vec2(u/amplificationA, 0.0);
         }
         
