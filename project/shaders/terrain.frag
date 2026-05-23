@@ -1,5 +1,12 @@
 #version 400 core
 
+#define MAX_IMPACTS 16
+
+uniform int impactCount;
+uniform vec3 impactPos[MAX_IMPACTS];
+uniform float impactTime[MAX_IMPACTS];
+uniform float time;
+
 in TES_OUT {
     vec3 pos;
     vec2 texCoord;
@@ -14,6 +21,21 @@ uniform sampler2D textureBrickColor;
 uniform sampler2D textureBrickBump;
 uniform vec3 lightPos;
 uniform float HEIGHT_SCALE;
+
+float computeWave(vec3 worldPos, vec3 center, float t)
+{
+    float dist = distance(worldPos.xz, center.xz);
+
+    float speed = 25.0;
+    float frequency = 20.0;
+    float damping = 3.0;
+
+    float wave = sin(dist * frequency - t * speed);
+    wave *= exp(-dist * damping);
+
+    return wave;
+}
+
 void main()
 {
     // Color based on height
@@ -76,11 +98,22 @@ void main()
     vec3 finalColor = color * (ambient + diff);
 
 
+    float waveSum = 0.0;
 
+    for (int i = 0; i < impactCount; i++)
+    {
+        float t = time - impactTime[i];
+        if (t < 0.0) continue;
 
+        float w = computeWave(frag_in.pos, impactPos[i], t);
 
+        // fade with time
+        float lifeFade = exp(-t * 2.5);
 
-    
+        waveSum += w * lifeFade;
+    }
+
+    finalColor += waveSum * vec3(1.0, 0.6, 0.2);
 
     FragColor = vec4(finalColor, 1.0);
 }

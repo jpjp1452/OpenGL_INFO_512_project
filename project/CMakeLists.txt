@@ -11,7 +11,7 @@ add_executable(OpenGLProject
                shader.h 
                boids.h 
                objectManager.h 
-               objectTexture.h)
+               objectTexture.h )
 
 target_compile_definitions(OpenGLProject PRIVATE
     PATH_TO_OBJECTS="${CMAKE_CURRENT_SOURCE_DIR}/Model"

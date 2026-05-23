@@ -9,7 +9,7 @@ uniform vec3 baseColor;
 uniform vec3 view_pos;
 uniform float time;
 
-// 0 = noyau soleil, 1 = halo
+// 0 = solar plasma, 1 = halo
 uniform int isHalo;
 uniform float haloIntensity;
 //https://tools.wwwtyro.net/space-3d/index.html#animationSpeed=1&fov=80&nebulae=true&pointStars=true&resolution=1024&seed=7jbalciyna40&stars=true&sun=true
@@ -28,7 +28,7 @@ void main()
         return;
     }
 
-    // Noyau solaire (�missif, plasma)
+    // solar plasma effect
     float p1 = sin(time * 1.2 + v_worldPos.x * 10.0) * 0.5 + 0.5;
     float p2 = sin(time * 1.7 + v_worldPos.y * 13.0) * 0.5 + 0.5;
     float p3 = sin(time * 1.3 + v_worldPos.z * 11.0) * 0.5 + 0.5;

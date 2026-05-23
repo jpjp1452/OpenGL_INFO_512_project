@@ -35,5 +35,4 @@ void main() {
     v_normal = normalize(normalMatrix * localNormal);
 
     gl_Position = P * V * worldPos;
-    
 }
