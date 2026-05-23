@@ -68,7 +68,7 @@ glm::vec3 fallingPosition = camera.Position;
 
 // --- Input & Shooting State ---
 bool shooting = false;
-float delayBetweenShots = 0.5f;
+float delayBetweenShots = 0.15f;
 float timeSinceLastShot = delayBetweenShots + 1.0f; 
 double mouseX;
 double mouseY;
@@ -838,7 +838,18 @@ int main() {
         reflectiveSetters.setMat4.push_back({ "P", projection });
         reflectiveSetters.setVec3.push_back({ "u_view_pos", camera.Position });
         reflectiveSetters.setVec3.push_back({ "light.light_pos", deltaReflec });
+        
+        float distanceReflecSphere = glm::length(camera.Position);
+        
+        
+        
+        if(distanceReflecSphere < radiusReflective) {
+            glDisable(GL_CULL_FACE);
+        }
         objectManager.drawObject("reflectiveSphere", reflectiveSetters);
+        if(distanceReflecSphere < radiusReflective) {
+            glEnable(GL_CULL_FACE);
+        }
 
         // --- RENDERING UI & HUD ---
         glDisable(GL_DEPTH_TEST);

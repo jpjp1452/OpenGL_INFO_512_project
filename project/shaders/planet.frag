@@ -22,7 +22,7 @@ void main()
     vec3 texColor = texture(planetTexture, v_texCoord).rgb;
     
     // Apply reddish Planet tint
-    texColor = mix(texColor, texColor * glm::vec3(1.2, 0.7, 0.5), 0.4);
+    texColor = mix(texColor, texColor * vec3(1.2, 0.7, 0.5), 0.4);
     
     // Lighting
     float ambient = 0.15;
