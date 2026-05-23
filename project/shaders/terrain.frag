@@ -119,14 +119,13 @@ void main()
 
         float w = computeWave(frag_in.pos, impactPos[i], t);
 
-        // fade dans le temps
+        // fade with time
         float lifeFade = exp(-t * 2.5);
 
         waveSum += w * lifeFade;
     }
 
     finalColor += waveSum * vec3(1.0, 0.6, 0.2);
-    diff += waveSum * 0.5;
 
     FragColor = vec4(finalColor, 1.0);
 }

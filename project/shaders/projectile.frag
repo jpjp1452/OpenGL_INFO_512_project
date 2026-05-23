@@ -17,16 +17,9 @@ void main()
     // Rim view dependent
     float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
 
-    // Pulsation du laser
     float pulse = 0.7 + 0.3 * sin(time * 20.0);
-
-    // Core plus contrôlé (évite le blanc pur)
     vec3 core = baseColor * (1.2 + pulse);
-
-    // Glow
     vec3 glow = baseColor * rim * 2.0;
-
-    // Atténuation douce
     float intensity = 0.6 + rim * 1.4;
 
     float d = length(gl_PointCoord - vec2(0.5));

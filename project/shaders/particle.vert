@@ -15,7 +15,7 @@ void main()
 {
     vec3 center = vec3(M[3]);
 
-    // axes caméra (billboard)
+    // camera axes (billboard)
     vec3 right = vec3(V[0][0], V[1][0], V[2][0]);
     vec3 up    = vec3(V[0][1], V[1][1], V[2][1]);
 
@@ -25,7 +25,7 @@ void main()
         up    * aPos.y * size;
 
     v_uv = aUV;
-    v_col = vec4(1.0); // ou couleur uniforme/attribuée
+    v_col = vec4(1.0);
 
     gl_Position = P * V * vec4(worldPos, 1.0);
 }
