@@ -44,19 +44,19 @@ const int SCREEN_HEIGHT = 1080;
 
 #include "terrainManager.h"
 #include "asteriodManager.hpp"
+#include <glm/gtc/random.hpp>
 
 #define SPEED_FACTOR 1.0f
 #define MouvementMultiplier 0.6f * SPEED_FACTOR
 #define RotationMultiplier 2.9f * SPEED_FACTOR
 #define JUMP_VELOCITY 0.2f * SPEED_FACTOR
 
-#define PROJECTILE_SPEED 1.5f * SPEED_FACTOR
 Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
 float gravity = 0.1f;
 float verticalVelocity = 0.0f;
 bool freeFalling = false;
 bool shooting = false;
-float delayBetweenShots = 0.02f;
+float delayBetweenShots = 0.5f;
 float timeSinceLastShot =delayBetweenShots  +1.0f; 
 double mouseX;
 double mouseY;
@@ -83,11 +83,6 @@ void processInput(GLFWwindow *window)
     else{
         shooting = false;
     }
-
-
-
-  
-
 
     if ((glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) && !freeFalling)
     {
@@ -119,8 +114,6 @@ void processInput(GLFWwindow *window)
 }
 
 
-
-
 void loadCubemapFace(const char* path, const GLenum& targetFace)
 {
     int imWidth, imHeight, imNrChannels;
@@ -145,40 +138,13 @@ void loadCubemapFace(const char* path, const GLenum& targetFace)
     stbi_image_free(data);
 }
 
+std::vector<Particle> particles;
+std::vector<ImpactRing> impactRings;
+std::vector<glm::vec3> projectileStarts;
+std::vector<glm::vec3> projectileEnds;
+std::vector<float> projectileBirthTimes;
 
-int main()
-{  
-/*
-    int maxY = 512;
-    int maxX = 512;
-    unsigned char *dataC = new unsigned char[maxX * maxY*3];
-    for (int y = 0; y < maxY; y++)
-    {
-        for (int x = 0; x < maxX; x++)
-        {
-            float value = glm::perlin(glm::vec2(x, y) * 0.01f);
-            unsigned colorValue = (value + 1.0f) * (127.5f*3);
-            dataC[(y * maxX + x) * 3 + 0] = (colorValue > 255) ? 255 : colorValue;
-            colorValue -= dataC[(y * maxX + x) * 3 + 0];
-            dataC[(y * maxX + x) * 3 + 1] = (colorValue > 255) ? 255 : colorValue;
-            colorValue -= dataC[(y * maxX + x) * 3 + 1];
-            dataC[(y * maxX + x) * 3 + 2] = (colorValue > 255) ? 255 : colorValue;
-        }
-    }
-    // Save the image with stb_image_write
-    stbi_write_png("perlin_noise.png", maxX, maxY, 3, dataC, maxX*3);
-    delete[] dataC;
-    exit(0);
-*/
-
-
-    
-
-
-
-
-
-
+int main() {  
 
     std::cout << "Initializing OpenGL Application..." << std::endl;
 
@@ -247,6 +213,8 @@ int main()
 
     Shader textureShader(PATH_TO_SHADERS "/texture.vert", PATH_TO_SHADERS "/texture.frag");
 
+    // Simple crosshair shader 
+	Shader crosshairShader(PATH_TO_SHADERS "/crosshair.vert", PATH_TO_SHADERS "/crosshair.frag");
 
     Shader sphereShader(PATH_TO_SHADERS "/sphere.vert", PATH_TO_SHADERS "/sphere.frag");
 
@@ -360,13 +328,10 @@ int main()
         // 4. now add to list of matrices
         asteroidData.modelMatrices[i] = asteroidModel;
     }
-
-
-
-
     
-    // Load shader
-    Shader shader("shaders/basic.vert", "shaders/basic.frag");
+	// Load particleShader and ringImpactShader
+    Shader particleShader("shaders/particle.vert", "shaders/particle.frag");
+	Shader ringImpactShader("shaders/ringImpact.vert", "shaders/ringImpact.frag");
 
     // Create simple triangle geometry
     float vertices[] = {
@@ -391,12 +356,22 @@ int main()
         1.0f, // Blue
     };
 
-    GLuint VAO, VBO, cubeMapTexture;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
+    float quad[] = {
+    -1, -1, 0,
+     1, -1, 0,
+    -1,  1, 0,
 
-    glBindVertexArray(VAO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    -1,  1, 0,
+     1, -1, 0,
+     1,  1, 0
+    };
+
+    GLuint particleVAO, particleVBO, ringVAO, ringVBO, cubeMapTexture;
+    glGenVertexArrays(1, &particleVAO);
+    glGenBuffers(1, &particleVBO);
+
+    glBindVertexArray(particleVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, particleVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     // Position attribute
@@ -407,8 +382,23 @@ int main()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void *)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
+
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
+
+    glGenVertexArrays(1, &ringVAO);
+    glGenBuffers(1, &ringVBO);
+
+    glBindVertexArray(ringVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, ringVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_STATIC_DRAW);
+
+    // position only
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindVertexArray(0);
+
 
 	// cube map texture setup
     glGenTextures(1, &cubeMapTexture);
@@ -470,6 +460,27 @@ int main()
 
     glBindVertexArray(0);
 
+    // Crosshair (insert after ringVAO creation)
+    GLuint crossVAO = 0, crossVBO = 0;
+    {
+        float crosshairVerts[] = {
+            -0.02f, 0.0f, // horizontal left
+             0.02f, 0.0f, // horizontal right
+             0.0f, -0.02f, // vertical down
+             0.0f,  0.02f  // vertical up
+        };
+
+        glGenVertexArrays(1, &crossVAO);
+        glGenBuffers(1, &crossVBO);
+        glBindVertexArray(crossVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, crossVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(crosshairVerts), crosshairVerts, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+    }
+
     // Main render loop
     std::cout << "Controls: W/A/S/D to move, Arrow keys to rotate, ESC to quit" << std::endl;
 
@@ -512,14 +523,7 @@ int main()
     
     
     glm::vec3 projectileDirection ;
-    glm::vec3 projectilePosition ;
-    std::vector<glm::vec3> projectileDirections;
-    std::vector<glm::vec3> projectilePositions;
-    
-
-    
-    
-    
+    glm::vec3 muzzleOffsetLocal = glm::vec3(0.3f, -0.25f, 0.0f);
     
     
     int weaponAnimFrame = 0;
@@ -528,6 +532,10 @@ int main()
     float inc = 0.0f;
     while (!glfwWindowShouldClose(window))
     {   
+        now = glfwGetTime();
+        float deltaTime = now - lastTime;
+        lastTime = now;
+
         processInput(window);
         // Clear screen
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -542,7 +550,7 @@ int main()
         float minHeight = heightUnderCamera + 1.5f;
         if (freeFalling)
         {
-            verticalVelocity -= gravity * (now - lastTime);
+            verticalVelocity -= gravity * deltaTime;
             fallingPosition.y += verticalVelocity;
             camera.Position.y = fallingPosition.y;
             if (camera.Position.y < minHeight)
@@ -556,16 +564,12 @@ int main()
         {
             camera.Position.y = minHeight;
         }
-        terrain.draw(view, projection, camera.Position, glm::vec3(0.0f, 100.0f, 0.0f));
 
 
         inc += 0.01f;
 
         
         asteroidManager.update(dataFish);
-
-        lastTime = now;
-        now = glfwGetTime();
 
         uniformSetters setters;
         setters.setFloats.push_back({"time", now});
@@ -664,27 +668,104 @@ int main()
         );
         glBindVertexArray(0);
 
-
-        uniformSetters projectileSetters;
-        projectileSetters.setVec3.push_back({ "baseColor", glm::vec3(0.88f, 0.88f, 0.18f) });
-        projectileSetters.setFloats.push_back({ "time", now });
-        projectileSetters.setMat4.push_back({ "V", view });
-        projectileSetters.setMat4.push_back({ "P", projection });
-        projectileSetters.setVec3.push_back({ "center", glm::vec3(0.0f, -0.5f, -8.0f) });
-        projectileSetters.setVec3.push_back({ "view_pos", camera.Position });
  
-        if (shooting){
+        if (shooting) {
             timeSinceLastShot = 0.0f;
             weaponAnimFrame = 1;
             shooting = false;
+
             projectileDirection = camera.Front;
-            projectilePosition = camera.Position;
-            projectileDirections.push_back(projectileDirection);
-            projectilePositions.push_back(projectilePosition);
-            objectManager.addObject("projectile", PATH_TO_OBJECTS "/sphere.obj", projectileShader);
-        }
-        else{
-            timeSinceLastShot += now - lastTime;
+
+            glm::vec3 weaponOrigin =
+                camera.Position +
+                (camera.Right * muzzleOffsetLocal.x) +
+                (camera.Up * muzzleOffsetLocal.y) +
+                (camera.Front * -muzzleOffsetLocal.z);
+
+            const float maxDist = 50.0f;
+            const float step = 0.25f;
+
+            // 1) Raycast depuis le centre de la caméra -> point sous le viseur
+            glm::vec3 camImpact = camera.Position;
+            {
+                glm::vec3 camDir = glm::normalize(camera.Front);
+                float traveled = 0.0f;
+                glm::vec3 p = camera.Position;
+                while (traveled < maxDist) {
+                    p += camDir * step;
+                    traveled += step;
+                    if (p.y < terrain.terrainHeightAt(p)) {
+                        p.y = terrain.terrainHeightAt(p);
+                        camImpact = p;
+                        break;
+                    }
+                }
+                if (traveled >= maxDist) camImpact = camera.Position + camDir * maxDist;
+            }
+
+            // 2) Direction du tir : de l'arme vers le point trouvé par la caméra
+            glm::vec3 shotDir = glm::normalize(camImpact - weaponOrigin);
+
+            // 3) Raycast depuis l'arme le long de shotDir pour obtenir l'impact "physique"
+            glm::vec3 impactPoint = weaponOrigin;
+            {
+                float traveled = 0.0f;
+                glm::vec3 p = weaponOrigin;
+                while (traveled < maxDist) {
+                    p += shotDir * step;
+                    traveled += step;
+                    if (p.y < terrain.terrainHeightAt(p)) {
+                        p.y = terrain.terrainHeightAt(p);
+                        impactPoint = p;
+                        break;
+                    }
+                }
+                if (traveled >= maxDist) impactPoint = weaponOrigin + shotDir * maxDist;
+            }
+
+            // Spawn particules (inchangé)
+            for (int p = 0; p < 25; p++)
+            {
+                Particle part;
+                part.position = impactPoint;
+
+                float theta = ((rand() % 100) / 100.0f) * 6.28f;
+                float phi = ((rand() % 100) / 100.0f) * 3.14f;
+
+                glm::vec3 dir = glm::vec3(
+                    cos(theta) * sin(phi),
+                    cos(phi),
+                    sin(theta) * sin(phi)
+                );
+
+                glm::vec3 finalDir = glm::normalize(
+                    dir * 1.5f + (-projectileDirection) * 2.0f
+                );
+
+                part.velocity = finalDir * (5.0f + (rand() % 300) / 100.0f);
+                part.life = 0.2f + (rand() % 100) / 400.0f;
+                part.initialLife = part.life;
+                part.scale = 0.25f + (rand() % 100) / 500.0f;
+                part.rotationAxis = glm::normalize(glm::vec3(dir.x, dir.y, dir.z + 0.1f));
+                part.rotationAngle = rand() % 360;
+
+                particles.push_back(part);
+            }
+
+            // Trajectoire visuelle du projectile : weaponOrigin -> impactPoint
+            projectileStarts.push_back(weaponOrigin);
+            projectileEnds.push_back(impactPoint);
+            projectileBirthTimes.push_back(now);
+
+            // Anneau d'impact
+            ImpactRing ring;
+            ring.position = impactPoint;
+            ring.life = 0.6f;
+            ring.initialLife = ring.life;
+            ring.radius = 0.1f;
+            impactRings.push_back(ring);
+        } else {
+            timeSinceLastShot += deltaTime;
             if (timeSinceLastShot>= 0.1f){
                 weaponAnimFrame = 2;
                 if (timeSinceLastShot >= 0.2f){
@@ -696,31 +777,168 @@ int main()
             }
         }
 
-
-
-        for (size_t i = 0; i < projectilePositions.size(); i++){
-            float distance = glm::length(projectilePositions[i] - camera.Position);
-            float heightUnderProjectile = terrain.terrainHeightAt(projectilePositions[i]);
-            float dif = projectilePositions[i].y - heightUnderProjectile;
-            std::cout << "diff: " << dif << std::endl;
-
-
-            if (distance > 50.0f || projectilePositions[i].y < heightUnderProjectile){
-                projectilePositions.erase(projectilePositions.begin() + i);
-                projectileDirections.erase(projectileDirections.begin() + i);
-                i--;
-                objectManager.removeOneObject("projectile");
+        for (size_t i = 0; i < projectileEnds.size(); )
+        {
+            if (now - projectileBirthTimes[i] > 0.15f)
+            {
+                projectileStarts.erase(projectileStarts.begin() + i);
+                projectileEnds.erase(projectileEnds.begin() + i);
+                projectileBirthTimes.erase(projectileBirthTimes.begin() + i);
             }
-            else{
-                projectilePositions[i] += projectileDirections[i] * PROJECTILE_SPEED;
-                projectilePositions[i].y -= gravity * (now - lastTime);
+            else
+            {
+                ++i;
             }
         }
 
-        for (size_t i = 0; i <projectileData.modelMatrices.size(); i++){
-            projectileData.modelMatrices[i] = glm::translate(glm::mat4(1.0f), projectilePositions[i]) * glm::scale(glm::mat4(1.0f), glm::vec3(0.02f));
+        projectileData.modelMatrices.clear();
+
+        for (size_t i = 0; i < projectileEnds.size(); ++i)
+        {
+            glm::vec3 start = projectileStarts[i];
+            glm::vec3 end = projectileEnds[i];
+
+            glm::vec3 delta = end - start;
+
+            float distance = glm::length(delta);
+
+            glm::vec3 forwardDir;
+
+            if (distance > 0.0001f)
+                forwardDir = glm::normalize(delta);
+            else
+                forwardDir = camera.Front;
+
+            distance = glm::max(distance, 0.15f);
+
+            glm::vec3 midPoint = (start + end) * 0.5f;
+
+            glm::mat4 trans = glm::translate(glm::mat4(1.0f), midPoint);
+
+            glm::mat4 rot = rotateAtoB(
+                glm::vec3(0.0f, 0.0f, 1.0f),
+                forwardDir
+            );
+
+            glm::mat4 scaleMat = glm::scale(
+                glm::mat4(1.0f),
+                glm::vec3(0.001f, 0.001f, distance * 0.5f)
+            );
+
+            projectileData.modelMatrices.push_back(
+                trans * rot * scaleMat
+            );
         }
+
+        terrain.addImpact(impactRings, now);
+        terrain.draw(view, projection, camera.Position, glm::vec3(0.0f, 100.0f, 0.0f));
+
+        // On donne une couleur brillante (ex: rouge vif lumineux)
+        uniformSetters projectileSetters;
+        projectileSetters.setFloats.push_back({ "time", now });
+        projectileSetters.setMat4.push_back({ "V", view });
+        projectileSetters.setMat4.push_back({ "P", projection });
+        projectileSetters.setVec3.push_back({ "baseColor", glm::vec3(2.5f, 0.3f, 0.3f) });
+        projectileSetters.setVec3.push_back({ "center", glm::vec3(0.0f, -0.5f, -8.0f) });
+        projectileSetters.setVec3.push_back({ "view_pos", camera.Position });
+
+        // -- Rendu FLUO additif pour le laser --
+        glDepthMask(GL_FALSE);                    // Ne pas écrire dans le Z-buffer
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);        // Rendu Additif
+        glDisable(GL_CULL_FACE);
+
         objectManager.drawObject("projectile", projectileSetters);
+
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Restauration standard
+        glDepthMask(GL_TRUE);
+
+        // --- MISE À JOUR ET RENDU DES PARTICULES ---
+        particleShader.use();
+        particleShader.setMatrix4("V", view);
+        particleShader.setMatrix4("P", projection);
+
+        glDepthMask(GL_FALSE);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+        glBindVertexArray(particleVAO);
+
+        for (size_t i = 0; i < particles.size(); )
+        {
+            Particle& p = particles[i];
+
+            p.life -= deltaTime;
+            if (p.life <= 0.0f)
+            {
+                particles.erase(particles.begin() + i);
+                continue;
+            }
+
+            // mouvement simple + bruit léger
+            glm::vec3 noise = glm::sphericalRand(1.0f) * 0.2f;
+            p.velocity += noise * deltaTime;
+            p.velocity *= 0.98f;
+            p.position += p.velocity * deltaTime;
+
+            float t = p.life / p.initialLife;
+
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), p.position);
+
+            particleShader.setMatrix4("M", model);
+            particleShader.setFloat("size", p.scale * (0.3f + t));
+
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+
+            ++i;
+        }
+
+        ringImpactShader.use();
+        ringImpactShader.setMatrix4("V", view);
+        ringImpactShader.setMatrix4("P", projection);
+
+        glBindVertexArray(ringVAO);
+
+        for (size_t i = 0; i < impactRings.size(); )
+        {
+            ImpactRing& r = impactRings[i];
+
+            r.life -= deltaTime;
+            if (r.life <= 0.0f) {
+                impactRings.erase(impactRings.begin() + i);
+                continue;
+            }
+
+            float t = 1.0f - (r.life / r.initialLife);
+            float radius = 0.1f + (1.0f - t) * 0.5f;
+
+            glm::mat4 M = glm::translate(glm::mat4(1.0f), r.position);
+            M = glm::scale(M, glm::vec3(radius));
+
+            ringImpactShader.setMatrix4("M", M);
+            glDrawArrays(GL_TRIANGLES, 0, 6); // On dessine l'anneau d'impact
+
+            i++;
+        }
+
+        glBindVertexArray(0);
+
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_TRUE);
+        glEnable(GL_CULL_FACE);
+
+        // --------------------------------------------
+
+        // Draw crosshair
+        glDisable(GL_DEPTH_TEST);
+        glLineWidth(2.0f);
+        crosshairShader.use();
+        crosshairShader.setVector3f("u_color", glm::vec3(1.0f, 1.0f, 1.0f));
+        glBindVertexArray(crossVAO);
+        glDrawArrays(GL_LINES, 0, 4);
+        glBindVertexArray(0);
+        glEnable(GL_DEPTH_TEST);
+
+        
 
         uniformSetters hudSetters;
         hudSetters.setIntegers.push_back({"weaponFrame", weaponAnimFrame});
@@ -734,8 +952,12 @@ int main()
     }
 
     // Cleanup
-    glDeleteBuffers(1, &VBO);
-    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &particleVBO);
+    glDeleteVertexArrays(1, &particleVAO);
+	glDeleteBuffers(1, &ringVBO);
+	glDeleteVertexArrays(1, &ringVAO);
+    glDeleteBuffers(1, &crossVBO);
+    glDeleteVertexArrays(1, &crossVAO);
     glfwDestroyWindow(window);
     glfwTerminate();
 

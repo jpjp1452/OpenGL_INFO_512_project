@@ -38,6 +38,23 @@
 #define PATH_TO_SHADERS "shaders"
 #endif
 
+struct Particle {
+    glm::vec3 position;
+    glm::vec3 velocity;
+    float life;
+    float initialLife;
+    float scale;
+    glm::vec3 rotationAxis;
+    float rotationAngle;
+};
+
+struct ImpactRing {
+    glm::vec3 position;
+    float life;
+    float initialLife;
+    float radius;
+};
+
 float simpleQuad[] = {
     // positions     // texture coords
     -1,
@@ -580,6 +597,7 @@ public:
         terrainShader.setMatrix4("P", projection);
         terrainShader.setVector3f("u_view_pos", cameraPos);
         terrainShader.setVector3f("lightPos", lightPos);
+        terrainShader.setFloat("time", glfwGetTime());
 
         glBindVertexArray(VAO);
 
@@ -604,6 +622,24 @@ public:
                 glBindTexture(GL_TEXTURE_2D, textureID_terrain[i][j]);
                 glDrawArrays(GL_PATCHES, 0, 4);
             }
+        }
+    }
+
+    void addImpact(const std::vector<ImpactRing>& rings, float now)
+    {
+        terrainShader.use(); // S'assurer que le shader du terrain est actif
+        int count = std::min((int)rings.size(), 16);
+        terrainShader.setInteger("impactCount", count);
+
+        for (int i = 0; i < count; i++)
+        {
+            std::string posName = "impactPos[" + std::to_string(i) + "]";
+            std::string timeName = "impactTime[" + std::to_string(i) + "]";
+
+            terrainShader.setVector3f(posName.c_str(), rings[i].position);
+
+            float t = now - (rings[i].initialLife - rings[i].life);
+            terrainShader.setFloat(timeName.c_str(), t);
         }
     }
 };
