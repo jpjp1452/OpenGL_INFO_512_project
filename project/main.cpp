@@ -24,7 +24,8 @@
 #include "objectManager.h"
 #include "boids.h"
 #include "terrainManager.h"
-#include "asteriodManager.hpp"
+#include "alienManager.hpp"
+#include "LSystem.hpp"
 
 
 // =========================================================================
@@ -424,20 +425,22 @@ int main() {
     std::cout << "Loading model..." << std::endl;
     ObjectManager objectManager;
     
+    glm::vec3 sunPosition = glm::vec3(50.0f, 20.0f, -50.0f);
+
     ShaderFilePaths shaderPaths;
     shaderPaths.addFragmentShader(PATH_TO_SHADERS "/textureLighting.frag");
     shaderPaths.addVertexShader(PATH_TO_SHADERS "/fishTextureLighting.vert");
     Shader textureLightingShader(shaderPaths);
     
     textureLightingShader.use();
-    textureLightingShader.setFloat("shininess", 32.0f);
-    textureLightingShader.setFloat("light.ambient_strength", 0.1f);
-    textureLightingShader.setFloat("light.diffuse_strength", 1.8f);
-    textureLightingShader.setFloat("light.specular_strength", 1.0f);
+    textureLightingShader.setFloat("shininess", 64.0f);
+    textureLightingShader.setFloat("light.ambient_strength", 0.25f);
+    textureLightingShader.setFloat("light.diffuse_strength", 1.2f);
+    textureLightingShader.setFloat("light.specular_strength", 0.35f);
     textureLightingShader.setFloat("light.constant", 1.0f);
-    textureLightingShader.setFloat("light.linear", 0.14f);
-    textureLightingShader.setFloat("light.quadratic", 0.07f);
-    textureLightingShader.setVector3f("light.light_pos", glm::vec3(0.0f, 0.0f, 0.0f));
+    textureLightingShader.setFloat("light.linear", 0.0f);
+    textureLightingShader.setFloat("light.quadratic", 0.0f);
+    textureLightingShader.setVector3f("light.light_pos", sunPosition);
 
     Shader textureShader(PATH_TO_SHADERS "/texture.vert", PATH_TO_SHADERS "/texture.frag");
     Shader crosshairShader(PATH_TO_SHADERS "/crosshair.vert", PATH_TO_SHADERS "/crosshair.frag");
@@ -474,16 +477,14 @@ int main() {
 
     size_t numModelsTogenerate = 10;
     for (size_t i = 0; i < numModelsTogenerate; i++) {
-        objectManager.addObject("fish", PATH_TO_OBJECTS "/small_green_alien.obj", textureLightingShader);
+        objectManager.addObject("alien", PATH_TO_OBJECTS "/small_green_alien.obj", textureLightingShader);
     }
-    AsteroidManager asteroidManager(numModelsTogenerate, terrain);
-    ObjectsData &dataFish = objectManager.objects.at("fish");
+    ObjectsData &dataAlien = objectManager.objects.at("alien");
 
 
     // 3. TRANSFORMATIONS & GEOMETRY INIT EXTRAS
     ObjectsData &projectileData = objectManager.objects.at("projectile");
 
-    glm::vec3 sunPosition = glm::vec3(50.0f, 20.0f, -50.0f);
     glm::vec3 planetPosition = glm::vec3(25.0f, 25.0f, -25.0f);
     
     ObjectsData &sphereData = objectManager.objects.at("sphere");
@@ -498,9 +499,47 @@ int main() {
     planetData.modelMatrices[0] = glm::translate(glm::mat4(1.0f), planetPosition);
     planetData.modelMatrices[0] = glm::scale(planetData.modelMatrices[0], glm::vec3(0.8f, 0.8f, 0.8f));
 
+    float scaleReflective = 1.5f;
     ObjectsData& refSphereData = objectManager.objects.at("reflectiveSphere");
-    refSphereData.modelMatrices[0] = glm::translate(refSphereData.modelMatrices[0], glm::vec3(20.0f, 1.0f, 20.0f));
-    refSphereData.modelMatrices[0] = glm::scale(refSphereData.modelMatrices[0], glm::vec3(1.0f, 1.0f, 1.0f));
+    refSphereData.modelMatrices[0] = glm::translate(refSphereData.modelMatrices[0], glm::vec3(0.0f, 0.0f, 0.0f));
+    refSphereData.modelMatrices[0] = glm::scale(refSphereData.modelMatrices[0], glm::vec3(scaleReflective, scaleReflective, scaleReflective));
+
+
+    float minX = std::numeric_limits<float>::max();
+    float maxX = std::numeric_limits<float>::lowest();
+    for (const auto& vertex : refSphereData.object.vertices) {
+        if (vertex.Position.x < minX) minX = vertex.Position.x;
+        if (vertex.Position.x > maxX) maxX = vertex.Position.x;
+    }
+    float radiusReflective = ((maxX - minX) * 0.5f) * scaleReflective;
+    AlienManager alienManager(numModelsTogenerate, terrain, dataAlien, radiusReflective);
+
+    size_t iterations = 3;
+    std::vector<Rule> rules = {
+        {"X", "F[-**FX][--/FX][+*FX][+/F+X]"}
+    };
+    std::string input = "X";
+    std::string barkTexture= PATH_TO_TEXTURE "/bark.png";
+    std::string leafTexture= PATH_TO_TEXTURE "/foliageTree.png";
+    
+    ShaderFilePaths proceduralShaderPaths;
+    proceduralShaderPaths.addVertexShader(PATH_TO_SHADERS "/procedural.vert");
+    proceduralShaderPaths.addGeometryShader(PATH_TO_SHADERS "/procedural.geom");
+    proceduralShaderPaths.addFragmentShader(PATH_TO_SHADERS "/procedural.frag");
+    Shader proceduralShader(proceduralShaderPaths);
+
+    ProceduralParameters params;
+    params.angles = {30.0f, 30.0f, 30.0f};
+    params.growingFactors = {4.0f, 4.0f, 4.0f};
+    params.decreaseFactors = {0.95f, 0.80f};
+    params.iterations = iterations;
+    params.rules = rules;
+    params.inputString = input;
+
+    ProceduralObject proceduralObject(params, proceduralShader, barkTexture, leafTexture);
+
+
+
 
     // Asteroids instances generation
     unsigned int asteroidAmount = 1000;
@@ -677,21 +716,39 @@ int main() {
         glm::mat4 projection = camera.GetProjectionMatrix(camera.Zoom, (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT);
 
         updatePhysics(deltaTime, terrain);
-        asteroidManager.update(dataFish);
+        alienManager.update(deltaTime);
+        alienManager.drawHealthBar(view, projection, camera.GetCameraRight(), camera.GetCameraUp());
 
         processShooting(now, deltaTime, terrain, weaponAnimFrame);
         updateProjectiles(now, projectileData);
 
 
         // --- RENDERING STATIC & OPAQUE OBJECTS ---
+
+        // Render Terrain
+        terrain.addImpact(impactRings, (float)now);
+        terrain.draw(view, projection, camera.Position, sunPosition);
+
         
-        // Draw Fish
+        // Draw Aliens
         uniformSetters setters;
         setters.setFloats.push_back({"time", (float)now});
         setters.setMat4.push_back({"V", view});
         setters.setMat4.push_back({"P", projection});
         setters.setVec3.push_back({"u_view_pos", camera.Position});
-        objectManager.drawObject("fish", setters);
+        objectManager.drawObject("alien", setters);
+
+
+        uniformSetters proceduralSetters;
+        proceduralSetters.setMat4.push_back({"V", view});
+        proceduralSetters.setMat4.push_back({"P", projection});
+        glm::mat4 proceduralModel = glm::mat4(1.0f);
+        //scale up the procedural model
+        proceduralModel = glm::scale(proceduralModel, glm::vec3(0.5f, 0.5f, 0.5f));
+        proceduralSetters.setMat4.push_back({"M", proceduralModel});
+        proceduralSetters.setFloats.push_back({"leafStartFactor", 0.5f});
+        proceduralSetters.setFloats.push_back({"leafAmplification", 4.5f});
+        proceduralObject.draw(proceduralSetters);
 
         // Draw Sun
         uniformSetters sphereSetters;
@@ -745,16 +802,7 @@ int main() {
         glEnable(GL_CULL_FACE);
         glDepthFunc(GL_LESS);
 
-        // Draw Reflective Sphere
-        auto deltaReflec = light_pos + glm::vec3(0.0, 0.0, 2 * std::sin(now));
-        uniformSetters reflectiveSetters;
-        reflectiveSetters.setMat4.push_back({ "M", model });
-        reflectiveSetters.setMat4.push_back({ "itM", inverseModel });
-        reflectiveSetters.setMat4.push_back({ "V", view });
-        reflectiveSetters.setMat4.push_back({ "P", projection });
-        reflectiveSetters.setVec3.push_back({ "u_view_pos", camera.Position });
-        reflectiveSetters.setVec3.push_back({ "light.light_pos", deltaReflec });
-        objectManager.drawObject("reflectiveSphere", reflectiveSetters);
+
 
         // Draw Asteroids Instanced
         asteroidShader.use();
@@ -767,9 +815,6 @@ int main() {
         glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLsizei>(astData2.object.indices.size()), GL_UNSIGNED_INT, 0, asteroidAmount);
         glBindVertexArray(0);
 
-        // Render Terrain
-        terrain.addImpact(impactRings, (float)now);
-        terrain.draw(view, projection, camera.Position, glm::vec3(0.0f, 100.0f, 0.0f));
 
 
         // --- RENDERING PARTICLES & TRANSPARENCY ---
@@ -784,7 +829,17 @@ int main() {
         objectManager.drawObject("projectile", projectileSetters);
         renderParticlesAndRings(particleShader, ringImpactShader, particleVAO, ringVAO, view, projection, deltaTime);
 
-        
+        // Draw Reflective Sphere
+        auto deltaReflec = light_pos + glm::vec3(0.0, 0.0, 2 * std::sin(now));
+        uniformSetters reflectiveSetters;
+        reflectiveSetters.setMat4.push_back({ "M", model });
+        reflectiveSetters.setMat4.push_back({ "itM", inverseModel });
+        reflectiveSetters.setMat4.push_back({ "V", view });
+        reflectiveSetters.setMat4.push_back({ "P", projection });
+        reflectiveSetters.setVec3.push_back({ "u_view_pos", camera.Position });
+        reflectiveSetters.setVec3.push_back({ "light.light_pos", deltaReflec });
+        objectManager.drawObject("reflectiveSphere", reflectiveSetters);
+
         // --- RENDERING UI & HUD ---
         glDisable(GL_DEPTH_TEST);
         glLineWidth(2.0f);

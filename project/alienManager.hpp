@@ -108,7 +108,7 @@ public:
         }
         heightAlien = maxy - miny;
         offsetY = -miny;
-        radiusAlien = (maxx - minx + maxz - minz) * 0.5f;
+        radiusAlien = (maxx - minx + maxz - minz) * 0.25f;
         radiusReflective = reflectiveSphereRadius;
         alienInfos.resize(how_many_aliens);
 
@@ -168,7 +168,7 @@ public:
         for (size_t i = 0; i < alienInfos.size(); i++)
         {
             glm::vec3 direction = -alienInfos[i].alienPosition;
-            float distance = glm::length(direction);
+            float distance = glm::length(direction) - (alienInfos[i].alienScale.y *radiusAlien);
             glm::mat4 model(1.0f);
 
             if (distance > radiusReflective)
