@@ -11,6 +11,8 @@ out TES_OUT {
     vec3 pos;
     vec2 texCoord;
     vec3 normal;
+    vec3 tangent;
+    vec3 bitangent;
     float height;
 } tes_out;
 
@@ -37,22 +39,26 @@ void main()
     float height = texture(heightMap, texCoord).r;
     pos.y = (height - 0.5) * HEIGHT_SCALE; // map [0,1] to [-1, 1]
 
+    vec2 delta = 1.0 / vec2(textureSize(heightMap, 0));
     //calculate normal based on heightmap
-    float heightL = texture(heightMap, texCoord + vec2(-0.01, 0)).r;
-    float heightR = texture(heightMap, texCoord + vec2(0.01, 0)).r;
-    float heightD = texture(heightMap, texCoord + vec2(0, -0.01)).r;
-    float heightU = texture(heightMap, texCoord + vec2(0, 0.01)).r;
+    float heightL = texture(heightMap, texCoord - vec2(delta.x, 0.0)).r;
+    float heightR = texture(heightMap, texCoord + vec2(delta.x, 0.0)).r;
+    float heightD = texture(heightMap, texCoord - vec2(0.0, delta.y)).r;
+    float heightU = texture(heightMap, texCoord + vec2(0.0, delta.y)).r;
 
     vec3 slopx = vec3(0.02, (heightR - heightL) * HEIGHT_SCALE, 0.0);
     vec3 slopz = vec3(0.0, (heightU - heightD) * HEIGHT_SCALE, 0.02);
     
-    vec3 normal = normalize(cross(slopz, slopx));
+    vec3 normal = normalize(cross(slopx, slopz));
 
-    
+    vec3 tangent = normalize(slopx);
+    vec3 bitangent = normalize(slopz);
 
     tes_out.pos = pos;
     tes_out.texCoord = texCoord;
     tes_out.normal = normal;
+    tes_out.tangent = tangent;
+    tes_out.bitangent = bitangent;
     tes_out.height = height;
 
     gl_Position = P * V * vec4(pos, 1.0);

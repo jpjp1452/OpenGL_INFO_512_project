@@ -4,6 +4,8 @@ in TES_OUT {
     vec3 pos;
     vec2 texCoord;
     vec3 normal;
+    vec3 tangent;
+    vec3 bitangent;
     float height;
 } frag_in;
 
@@ -43,44 +45,28 @@ void main()
     */
     
     // Texture atlas blend: smoothly transition from left half to right half by height.
-    vec2 uvBase = frag_in.texCoord * 0.5;
+    vec2 uvBase = frag_in.texCoord ;
     vec2 uvLow = uvBase;
-    vec2 uvHigh = uvBase + vec2(0.5, 0.0);
-    float blend = smoothstep(0.20, 0.80, frag_in.height);
 
-    vec3 colorLow = texture(textureBrickColor, uvLow).rgb;
-    vec3 colorHigh = texture(textureBrickColor, uvHigh).rgb;
-    vec3 color = mix(colorLow, colorHigh, blend);
+    vec3 color = texture(textureBrickColor, uvLow).rgb;
 
     // Blend bump gradients from both atlas regions for a smooth normal transition.
-    vec2 texel = 1.0 / vec2(textureSize(textureBrickBump, 0));
+    vec2 delta = 1.0 / vec2(textureSize(textureBrickBump, 0));
 
-    float lowL = texture(textureBrickBump, uvLow - vec2(texel.x, 0.0)).r;
-    float lowR = texture(textureBrickBump, uvLow + vec2(texel.x, 0.0)).r;
-    float lowD = texture(textureBrickBump, uvLow - vec2(0.0, texel.y)).r;
-    float lowU = texture(textureBrickBump, uvLow + vec2(0.0, texel.y)).r;
+    float bumpScale = 0.05; // Adjust for stronger/weaker bump effect
+    float lowL = texture(textureBrickBump, uvLow - vec2(delta.x, 0.0)).r*bumpScale;
+    float lowR = texture(textureBrickBump, uvLow + vec2(delta.x, 0.0)).r*bumpScale;
+    float lowD = texture(textureBrickBump, uvLow - vec2(0.0, delta.y)).r*bumpScale;
+    float lowU = texture(textureBrickBump, uvLow + vec2(0.0, delta.y)).r*bumpScale;
 
-    float highL = texture(textureBrickBump, uvHigh - vec2(texel.x, 0.0)).r;
-    float highR = texture(textureBrickBump, uvHigh + vec2(texel.x, 0.0)).r;
-    float highD = texture(textureBrickBump, uvHigh - vec2(0.0, texel.y)).r;
-    float highU = texture(textureBrickBump, uvHigh + vec2(0.0, texel.y)).r;
+    vec3 slopx = vec3(2.0 * delta.x, lowR - lowL, 0.0);
+    vec3 slopz = vec3(0.0, lowU - lowD, 2.0 * delta.y);
+    vec3 normal = normalize(cross(slopx, slopz));
 
-    float dXLow = lowR - lowL;
-    float dYLow = lowU - lowD;
-    float dXHigh = highR - highL;
-    float dYHigh = highU - highD;
 
-    float bumpScale = 5.0; 
-    float dX = mix(dXLow, dXHigh, blend) * bumpScale;
-    float dY = mix(dYLow, dYHigh, blend) * bumpScale;
-
-    vec3 n = normalize(frag_in.normal);
-    vec3 t = vec3(1.0, 0.0, 0.0);
-    t = normalize(t - dot(t, n) * n);
-    vec3 b = normalize(cross(n, t));
     
-    vec3 bumpedNormal = normalize(n - dX * t - dY * b);
-
+    vec3 bumpedNormal = frag_in.tangent * normal.x + frag_in.normal * normal.y + frag_in.bitangent * normal.z;
+    bumpedNormal = normalize(bumpedNormal);
     vec3 toLight = lightPos - frag_in.pos;
     float lightLen = length(toLight);
     vec3 lightDir = (lightLen > 1e-5) ? (toLight / lightLen) : normalize(vec3(0.4, 1.0, 0.2));

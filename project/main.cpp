@@ -39,11 +39,11 @@
 #endif
 
 
-const int SCREEN_WIDTH = 1920;
-const int SCREEN_HEIGHT = 1080;
+const int SCREEN_WIDTH = 720;
+const int SCREEN_HEIGHT = 720;
 
 #include "terrainManager.h"
-#include "asteriodManager.hpp"
+#include "alienManager.hpp"
 #include "LSystem.hpp"
 
 #define SPEED_FACTOR 1.0f
@@ -66,6 +66,13 @@ double lastMouseY;
 
 glm::vec3 fallingPosition = camera.Position;
 
+
+
+struct HealthBar
+{
+    float health;
+    float maxHealth;
+};
 
 
 void processInput(GLFWwindow *window)
@@ -301,14 +308,12 @@ int main()
     float maxScale = 1.5f;
     float minScale = 0.5f;
     size_t numModelsTogenerate = 10;
-    
     for (size_t i = 0; i < numModelsTogenerate; i++)
     {
-        objectManager.addObject("fish", PATH_TO_OBJECTS "/small_green_alien.obj", textureLightingShader);
+        objectManager.addObject("alien", PATH_TO_OBJECTS "/small_green_alien.obj", textureLightingShader);
     }
-    AsteroidManager asteroidManager(numModelsTogenerate, terrain);
+    ObjectsData &dataAlien = objectManager.objects.at("alien");
 
-    ObjectsData &dataFish = objectManager.objects.at("fish");
 
     ObjectsData &projectileData = objectManager.objects.at("projectile");
 
@@ -325,8 +330,22 @@ int main()
     
 
     ObjectsData& refSphereData = objectManager.objects.at("reflectiveSphere");
-	refSphereData.modelMatrices[0] = glm::translate(refSphereData.modelMatrices[0], glm::vec3(20.0f, 1.0f, 20.0f));
-	refSphereData.modelMatrices[0] = glm::scale(refSphereData.modelMatrices[0], glm::vec3(1.0f, 1.0f, 1.0f));
+    float minx = std::numeric_limits<float>::max();
+    float maxx = std::numeric_limits<float>::lowest();
+    for (const auto& vertex : refSphereData.object.vertices)
+    {        if (vertex.Position.x < minx)
+            minx = vertex.Position.x;
+        if (vertex.Position.x > maxx)
+            maxx = vertex.Position.x;
+    }
+    float midx = (minx + maxx) / 2.0f;
+    float radiusReflective = (maxx - minx) / 2.0f;
+    float scaleReflective = 1.5f;
+    radiusReflective *= scaleReflective;
+    std::cout << "Reflective sphere mid x: " << midx << ", radius: " << radiusReflective << std::endl;
+
+	refSphereData.modelMatrices[0] = glm::translate(refSphereData.modelMatrices[0], glm::vec3(0.0f, 0.0f, 0.0f));
+	refSphereData.modelMatrices[0] = glm::scale(refSphereData.modelMatrices[0], glm::vec3(scaleReflective, scaleReflective, scaleReflective));
 
 
     unsigned int asteroidAmount = 1000;
@@ -361,6 +380,7 @@ int main()
     }
 
 
+    AlienManager alienManager(numModelsTogenerate, terrain, dataAlien, radiusReflective);
 
 
     
@@ -566,6 +586,7 @@ int main()
         glm::mat4 view = camera.GetViewMatrix();
         glm::mat4 projection = camera.GetProjectionMatrix(camera.Zoom, (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT);
 
+
         terrain.update(camera.Position);
         float heightUnderCamera = terrain.height_under_camera(camera.Position);
         //float heightAtCamera2 = terrain.terrainHeightAt(camera.Position);
@@ -592,8 +613,8 @@ int main()
         inc += 0.01f;
 
         
-        asteroidManager.update(dataFish);
-
+        alienManager.update((float)(now - lastTime));
+        alienManager.drawHealthBar(view, projection, camera.GetCameraRight(), camera.GetCameraUp());
 
 
 
@@ -627,7 +648,7 @@ int main()
         setters.setMat4.push_back({"P", projection});
         setters.setVec3.push_back({"u_view_pos", camera.Position});
   
-        objectManager.drawObject("fish", setters);
+        objectManager.drawObject("alien", setters);
         uniformSetters sphereSetters;
         sphereSetters.setVec3.push_back({ "baseColor", glm::vec3(1.0f, 0.12f, 0.03f) });
         sphereSetters.setFloats.push_back({ "time", now });
@@ -732,6 +753,19 @@ int main()
         uniformSetters cubeMapSetters;
 		objectManager.drawObject("cubeMap", cubeMapSetters);
 
+
+        uniformSetters proceduralSetters;
+        proceduralSetters.setMat4.push_back({"V", view});
+        proceduralSetters.setMat4.push_back({"P", projection});
+        glm::mat4 proceduralModel = glm::mat4(1.0f);
+        //scale up the procedural model
+        proceduralModel = glm::scale(proceduralModel, glm::vec3(0.5f, 0.5f, 0.5f));
+        proceduralSetters.setMat4.push_back({"M", proceduralModel});
+        proceduralSetters.setFloats.push_back({"leafStartFactor", 0.5f});
+        proceduralSetters.setFloats.push_back({"leafAmplification", 4.5f});
+        proceduralObject.draw(proceduralSetters);
+
+
 		// On restaure les �tats par d�faut
 		glEnable(GL_CULL_FACE);
 		glDepthFunc(GL_LESS);
@@ -771,16 +805,7 @@ int main()
         glBindVertexArray(0); 
 
 
-        uniformSetters proceduralSetters;
-        proceduralSetters.setMat4.push_back({"V", view});
-        proceduralSetters.setMat4.push_back({"P", projection});
-        glm::mat4 proceduralModel = glm::mat4(1.0f);
-        //scale up the procedural model
-        proceduralModel = glm::scale(proceduralModel, glm::vec3(1.0f, 1.0f, 1.0f));
-        proceduralSetters.setMat4.push_back({"M", proceduralModel});
-        proceduralSetters.setFloats.push_back({"leafStartFactor", 0.5f});
-        proceduralSetters.setFloats.push_back({"leafAmplification", 4.5f});
-        proceduralObject.draw(proceduralSetters);
+
 
 
         uniformSetters hudSetters;
@@ -792,11 +817,19 @@ int main()
 
 
 
-        fps(now);
+        //fps(now);
         glfwSwapBuffers(window);
         glfwPollEvents();
         //sleep 0.1 seconds
 
+        float distanceToCenter = glm::length(camera.Position);
+        if (distanceToCenter < radiusReflective)
+        {
+            std::cout << "Camera is inside" << std::endl;
+        }
+        else{
+            std::cout << "Camera is outside" << std::endl;
+        }
 
     }
 
