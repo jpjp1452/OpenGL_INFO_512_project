@@ -15,5 +15,5 @@ void main() {
 	vec3 V = normalize(u_view_pos - v_frag_coord); 
 	vec3 R = reflect(-V,N); 
 	FragColor = texture(cubemapSampler,R); 
-	FragColor.a = 0.45;
+	FragColor.a = 0.65;
 }

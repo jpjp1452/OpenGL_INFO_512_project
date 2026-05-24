@@ -17,8 +17,11 @@
 #define ADDITIONAL_SCALE 5.0f
 #define MIN_DISTANCE_FROM_SPHERE 20.0f
 #define ADDITIONAL_DISTANCE 10.0f
-#define SPEED 2.5f
-
+#define SPEED 20.5f
+#define DIFFICULTY_FACTOR 1.01f
+#define DIFFICULTY_INCREMENT 0.05f
+#define DAMAGE_FROM_PROJECTILE 60.1f
+#define MAX_ADDITIONAL_DISTANCE 50.0f
 
 #ifndef PATH_TO_SHADERS
 #define PATH_TO_SHADERS "shaders"
@@ -58,6 +61,7 @@ struct AlienInfo
     glm::vec3 alienScale;
     float health;
     float maxHealth;
+    float speed;
 };
 
 class AlienManager
@@ -73,16 +77,37 @@ public:
     float offsetY = 0.0f;
     float radiusAlien = 0.0f;
     float heightAlien = 0.0f;
+    float maxHead;
+    float minFeet;
     float minDistanceFromCenter = 0.0f;
+    float difficultyLevel = 1.0f;
+
     GLuint healthBarVAO, healthBarVBO;
 
+    AlienInfo newAlien()
+    {
+        AlienInfo info;
+        float x = ((rand() / (float)RAND_MAX) - 0.5f) * MAX_ADDITIONAL_DISTANCE;
+        float y = ((rand() / (float)RAND_MAX) - 0.5f) * MAX_ADDITIONAL_DISTANCE;
+        float z = ((rand() / (float)RAND_MAX) - 0.5f) * MAX_ADDITIONAL_DISTANCE;
+        x += (x > 0) ? minDistanceFromCenter : -minDistanceFromCenter;
+        y += (y > 0) ? minDistanceFromCenter : -minDistanceFromCenter;
+        z += (z > 0) ? minDistanceFromCenter : -minDistanceFromCenter;
+
+        info.alienPosition = glm::vec3(x, y, z);
+        float scale = ((rand() / (float)RAND_MAX)) * ADDITIONAL_SCALE + MIN_SCALE;
+        info.alienScale = glm::vec3(scale);
+        info.health = BASE_HEALTH * scale * difficultyLevel * DIFFICULTY_FACTOR;
+        info.maxHealth = BASE_HEALTH * scale * difficultyLevel * DIFFICULTY_FACTOR;
+        info.speed = SPEED * difficultyLevel * DIFFICULTY_FACTOR;
+        std::cout << "SPEED: " << info.speed << std::endl;
+        return info;
+    }
+
     AlienManager(size_t how_many_aliens, terrainManager &terrainManager, ObjectsData &alienData, float reflectiveSphereRadius) : terrain(terrainManager), alienObjectData(alienData)
-    {   
+    {
 
-        
-
-
-
+        difficultyLevel = 1.0f;
 
         float minx = std::numeric_limits<float>::max();
         float maxx = std::numeric_limits<float>::lowest();
@@ -107,45 +132,29 @@ public:
                 maxy = vertex.Position.y;
         }
         heightAlien = maxy - miny;
+        maxHead = maxy;
+        minFeet = miny;
         offsetY = -miny;
         radiusAlien = (maxx - minx + maxz - minz) * 0.25f;
         radiusReflective = reflectiveSphereRadius;
         alienInfos.resize(how_many_aliens);
-
         minDistanceFromCenter = radiusReflective + MIN_DISTANCE_FROM_SPHERE;
         for (size_t i = 0; i < how_many_aliens; i++)
         {
-            float x = ((rand() / (float)RAND_MAX) - 0.5f) * 300.0f;
-            float y = ((rand() / (float)RAND_MAX) - 0.5f) * 300.0f;
-            float z = ((rand() / (float)RAND_MAX) - 0.5f) * 300.0f;
-            x += (x > 0) ? minDistanceFromCenter : -minDistanceFromCenter;
-            y += (y > 0) ? minDistanceFromCenter : -minDistanceFromCenter;
-            z += (z > 0) ? minDistanceFromCenter : -minDistanceFromCenter;
-
-            alienInfos[i].alienPosition = glm::vec3(x, y, z);
-            float scale = ((rand() / (float)RAND_MAX)) * ADDITIONAL_SCALE + MIN_SCALE;
-            alienInfos[i].alienScale = glm::vec3(scale);
-            alienInfos[i].health = BASE_HEALTH * scale;
-            alienInfos[i].maxHealth = BASE_HEALTH * scale;
+            alienInfos[i] = newAlien();
         }
-        updatePosition(0.0f); 
-
-
-
-
-
+        updatePosition(0.0f);
 
         shaderHealthBar = Shader(PATH_TO_SHADERS "/healthBar.vert", PATH_TO_SHADERS "/healthBar.frag");
 
-
         float quadVertices[] = {
-            // positions 
+            // positions
             -1.0f, -1.0f, 0.0f, // bottom left
-            -1.0f,  1.0f, 0.0f, // top left
-             1.0f,  1.0f, 0.0f,  // top right
-             -1.0f, -1.0f, 0.0f, // bottom left
-             1.0f,  1.0f, 0.0f,  // top right
-             1.0f, -1.0f, 0.0f   // bottom right
+            -1.0f, 1.0f, 0.0f,  // top left
+            1.0f, 1.0f, 0.0f,   // top right
+            -1.0f, -1.0f, 0.0f, // bottom left
+            1.0f, 1.0f, 0.0f,   // top right
+            1.0f, -1.0f, 0.0f   // bottom right
         };
 
         glGenVertexArrays(1, &healthBarVAO);
@@ -156,31 +165,31 @@ public:
         glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 
         glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
-        
     }
 
     void updatePosition(float deltaTime)
-    {
+    {   
+        countTouchingSphere = 0;
         for (size_t i = 0; i < alienInfos.size(); i++)
         {
             glm::vec3 direction = -alienInfos[i].alienPosition;
-            float distance = glm::length(direction) - (alienInfos[i].alienScale.y *radiusAlien);
+            float distance = glm::length(direction) - (alienInfos[i].alienScale.y * radiusAlien);
             glm::mat4 model(1.0f);
 
             if (distance > radiusReflective)
             {
                 direction = glm::normalize(direction);
-                alienInfos[i].alienPosition += direction * SPEED * deltaTime;
+                alienInfos[i].alienPosition += direction * alienInfos[i].speed * deltaTime;
                 alienInfos[i].alienPosition.y = terrain.terrainHeightAt(alienInfos[i].alienPosition) + offsetY * alienInfos[i].alienScale.y; // keep alien above terrain
                 glm::vec3 toCenter = glm::normalize(-alienInfos[i].alienPosition);
                 float angleY = atan2(toCenter.x, toCenter.z) - glm::radians(90.0f);
                 model = glm::translate(model, alienInfos[i].alienPosition);
-                model *= glm::rotate(glm::mat4(1.0f),angleY,glm::vec3(0.0f, 1.0f, 0.0f));
-                model *= glm::scale(glm::mat4(1.0f),alienInfos[i].alienScale);
+                model *= glm::rotate(glm::mat4(1.0f), angleY, glm::vec3(0.0f, 1.0f, 0.0f));
+                model *= glm::scale(glm::mat4(1.0f), alienInfos[i].alienScale);
                 alienObjectData.modelMatrices[i] = model;
             }
             else
@@ -190,9 +199,58 @@ public:
         }
     }
 
-    void update(float deltaTime)
+    void lasersHitCheck(std::vector<glm::vec3> projectileStarts, std::vector<glm::vec3> projectileEnds)
     {
+        for (size_t i = 0; i < alienInfos.size(); i++)
+        {
+
+            for (size_t j = 0; j < projectileEnds.size(); j++)
+            {
+                glm::vec3 start = projectileStarts[j];
+                glm::vec3 end = projectileEnds[j];
+                glm::vec3 dir = end - start;
+                float segLen2 = glm::dot(dir, dir);
+                if (segLen2 == 0.0f)
+                    continue; // degenerate segment
+                glm::vec3 dirN = glm::normalize(dir);
+                glm::vec3 toAlien = alienInfos[i].alienPosition - start;
+                // projection length along the segment (clamped to segment)
+                float projectionLength = glm::dot(toAlien, dirN);
+                projectionLength = glm::clamp(projectionLength, 0.0f, glm::length(dir));
+                glm::vec3 projectedPoint = start + projectionLength * dirN;
+                float distanceToAlienX = projectedPoint.x - alienInfos[i].alienPosition.x;
+                float distanceToAlienY = projectedPoint.y - alienInfos[i].alienPosition.y;
+                float distanceToAlienZ = projectedPoint.z - alienInfos[i].alienPosition.z;
+
+                float lowerBoundDifY = minFeet * alienInfos[i].alienScale.y;
+                float upperBoundDifY = maxHead * alienInfos[i].alienScale.y;
+                if (lowerBoundDifY < distanceToAlienY && distanceToAlienY < upperBoundDifY)
+                {
+
+                    float horizontalDistance = sqrt(distanceToAlienX * distanceToAlienX + distanceToAlienZ * distanceToAlienZ);
+                    if (horizontalDistance < radiusAlien * alienInfos[i].alienScale.x)
+                    {
+                        std::cout << "BEFORE Alien " << i << " hit! Health: " << alienInfos[i].health << std::endl;
+                        std::cout << "BEFORE Alien " << i << " hit! Health: " << alienInfos[i].health << std::endl;
+                        alienInfos[i].health -= DAMAGE_FROM_PROJECTILE;
+                        std::cout << "Alien " << i << " hit! Health: " << alienInfos[i].health << std::endl;
+                        std::cout << "Alien " << i << " hit! Health: " << alienInfos[i].health << std::endl;
+                        if (alienInfos[i].health < 0.0f)
+                        {
+                            difficultyLevel += DIFFICULTY_INCREMENT;
+                            alienInfos[i] = newAlien();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    int update(float deltaTime,std::vector<glm::vec3> projectileStarts, std::vector<glm::vec3> projectileEnds)
+    {   
+        lasersHitCheck(projectileStarts, projectileEnds);
         updatePosition(deltaTime);
+        return countTouchingSphere;
     }
 
     void drawHealthBar(glm::mat4 view, glm::mat4 projection, glm::vec3 cameraUp, glm::vec3 cameraRight)
@@ -205,7 +263,7 @@ public:
             if (alienInfos[i].health <= 0.0f)
                 continue;
 
-            glm::vec3 center = alienInfos[i].alienPosition + glm::vec3(0.0f, (heightAlien-offsetY) * alienInfos[i].alienScale.y + 0.5f, 0.0f);
+            glm::vec3 center = alienInfos[i].alienPosition + glm::vec3(0.0f, (heightAlien - offsetY) * alienInfos[i].alienScale.y + 0.5f, 0.0f);
             float healthPercent = alienInfos[i].health / alienInfos[i].maxHealth;
             float barWidth = 1.0f;
             float barHeight = 0.2f;
@@ -216,7 +274,7 @@ public:
             shaderHealthBar.setVector3f("center", center);
             shaderHealthBar.setVector3f("cameraRight", cameraRight);
             shaderHealthBar.setVector3f("cameraUp", cameraUp);
-            shaderHealthBar.setFloat("healthPercent", 0.11f);
+            shaderHealthBar.setFloat("healthPercent", alienInfos[i].health / alienInfos[i].maxHealth);
             glDrawArrays(GL_TRIANGLES, 0, 6);
         }
     }

@@ -53,7 +53,7 @@ const int SCREEN_HEIGHT = 1080;
 #define MouvementMultiplier 0.6f * SPEED_FACTOR
 #define RotationMultiplier 2.9f * SPEED_FACTOR
 #define JUMP_VELOCITY 0.2f * SPEED_FACTOR
-
+#define DAMAGE_BY_ALIEN 0.21f
 
 // =========================================================================
 // GLOBAL VARIABLES
@@ -475,7 +475,7 @@ int main() {
 
     Shader asteroidShader(PATH_TO_SHADERS "/asteroid.vert", PATH_TO_SHADERS "/asteroid.frag");
 
-    size_t numModelsTogenerate = 10;
+    size_t numModelsTogenerate = 1;
     for (size_t i = 0; i < numModelsTogenerate; i++) {
         objectManager.addObject("alien", PATH_TO_OBJECTS "/small_green_alien.obj", textureLightingShader);
     }
@@ -674,7 +674,7 @@ int main() {
     
     glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 inverseModel = glm::transpose(glm::inverse(model));
-    glm::vec3 light_pos = glm::vec3(1.0, 2.0, 1.5);
+    glm::vec3 light_pos = sunPosition;
     
     double prev = glfwGetTime();
     double prevUpdate = prev;
@@ -700,6 +700,14 @@ int main() {
     double lastTime = glfwGetTime();
     double now = lastTime;
 
+
+    float healthReflectiveSphere = 100.0f;
+    float maxHealthReflectiveSphere = 100.0f;
+    Shader healthBarSphereShader(PATH_TO_SHADERS "/healthBarHud.vert", PATH_TO_SHADERS "/healthBarHud.frag");
+    objectManager.addObject("healthBarHud", PATH_TO_OBJECTS "/weapon_quad.obj", healthBarSphereShader);
+
+
+
     while (!glfwWindowShouldClose(window))
     {   
         now = glfwGetTime();
@@ -716,7 +724,9 @@ int main() {
         glm::mat4 projection = camera.GetProjectionMatrix(camera.Zoom, (float)SCREEN_WIDTH / (float)SCREEN_HEIGHT);
 
         updatePhysics(deltaTime, terrain);
-        alienManager.update(deltaTime);
+
+        int alienTouchingSphere =alienManager.update(deltaTime, projectileStarts, projectileEnds);
+        healthReflectiveSphere -= (float)alienTouchingSphere * DAMAGE_BY_ALIEN;
         alienManager.drawHealthBar(view, projection, camera.GetCameraRight(), camera.GetCameraUp());
 
         processShooting(now, deltaTime, terrain, weaponAnimFrame);
@@ -861,9 +871,14 @@ int main() {
         glBindVertexArray(0);
         glEnable(GL_DEPTH_TEST);
 
+        uniformSetters healthBarSetters;
+        healthBarSetters.setFloats.push_back({"healthPercent", healthReflectiveSphere / maxHealthReflectiveSphere});
+        objectManager.drawObject("healthBarHud", healthBarSetters);
         uniformSetters hudSetters;
         hudSetters.setIntegers.push_back({"weaponFrame", weaponAnimFrame});
         objectManager.drawObject("hud", hudSetters);
+
+
 
         // --- END OF FRAME ---
         fps(now);
