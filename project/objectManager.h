@@ -34,15 +34,7 @@
 
 #include "shader.h"
 
-/*Principe :
- * On donne le path du fichier -> on lit le fichier
- * 2 �tape
- * 1)load le model -> lit le fichier ligne par ligne
- * liste de position de normal de texture
- * suivant la premi�re lettre : lit les valeur suivant et les met dans un vec puis push dans la bonne liste
- * en gros sotck les data dans une frome de tableau
- */
-
+//get texture name from mtl file
 std::string textureNameInMtl(const std::string &mtlPath)
 {
     std::ifstream infile(mtlPath);
@@ -70,7 +62,7 @@ std::string textureNameInMtl(const std::string &mtlPath)
 }
 
 
-
+// Split a string by a delimiter and convert the parts to unsigned int, returning them as a tuple
 std::tuple<unsigned int, unsigned int, unsigned int> split(const std::string &s, char delimiter)
 {
     size_t start = 0;
@@ -245,7 +237,7 @@ public:
 
         if (normals.empty())
         {
-            // calculate normals
+            // calculate normals if not present in the OBJ file
             std::cout << "Calculating normals..." << std::endl;
             for (const auto &face : facesIndices)
             {
@@ -308,11 +300,10 @@ public:
             throw std::runtime_error("No texture coordinates found in OBJ file");
         }
 
-
+        // Create vertices and indices array for indexed drawing
         unsigned uniqueVerticesCount = 0;
         using indicesKey = std::tuple<unsigned int, unsigned int, unsigned int>;
         std::unordered_map<indicesKey, unsigned int, IndicesKeyHash> uniqueVerticesMap;
-        std::cout << "Processing faces to create vertices and indices..." << std::endl;
         for (const auto &face : facesIndices)
         {
             std::tuple<unsigned int, unsigned int, unsigned int> verticesIndeces[3] = {face.f1, face.f2, face.f3};
@@ -334,48 +325,6 @@ public:
                 indices.push_back(uniqueVerticesMap[indicesKey]);
             }
         }
-
-
-/*
-        for (const auto &face : facesIndices)
-        {
-            size_t p1 = std::get<0>(face.f1);
-            size_t t1 = std::get<1>(face.f1);
-            size_t n1 = std::get<2>(face.f1);
-            size_t p2 = std::get<0>(face.f2);
-            size_t t2 = std::get<1>(face.f2);
-            size_t n2 = std::get<2>(face.f2);
-            size_t p3 = std::get<0>(face.f3);
-            size_t t3 = std::get<1>(face.f3);
-            size_t n3 = std::get<2>(face.f3);
-
-            Vertex v1, v2, v3;
-            v1.Position = positions.at(p1 - 1);
-            if (t1 != MAX_SIZE_T && !textures.empty())
-                v1.Texture = textures.at(t1 - 1);
-            else
-                v1.Texture = glm::vec2(0.0f, 0.0f);
-            v1.Normal = normals.at(n1 - 1);
-
-            v2.Position = positions.at(p2 - 1);
-            if (t2 != MAX_SIZE_T && !textures.empty())
-                v2.Texture = textures.at(t2 - 1);
-            else
-                v2.Texture = glm::vec2(0.0f, 0.0f);
-            v2.Normal = normals.at(n2 - 1);
-
-            v3.Position = positions.at(p3 - 1);
-            if (t3 != MAX_SIZE_T && !textures.empty())
-                v3.Texture = textures.at(t3 - 1);
-            else
-                v3.Texture = glm::vec2(0.0f, 0.0f);
-            v3.Normal = normals.at(n3 - 1);
-
-            vertices.push_back(v1);
-            vertices.push_back(v2);
-            vertices.push_back(v3);
-        }
-*/
         numVertices = vertices.size();
         printf("Model loaded with %d vertices\n", numVertices);
     }
@@ -488,6 +437,7 @@ public:
         std::cout << "Texture loaded: " << texturePath << " (" << width << "x" << height << ")" << std::endl;
         return true;
     }
+
 };
 
 struct ObjectsData
@@ -523,6 +473,7 @@ public:
         }
         objects.emplace(name, ObjectsData{obj, shader, {glm::mat4(1.0f)}});
     }
+    //remove one model matrix of the object
     void removeOneObject(const std::string &name)
     {
         auto it = objects.find(name);
@@ -537,7 +488,7 @@ public:
         }
         else
         {
-            std::cout << "Emptying object data for " << name << std::endl;
+            std::cout << "No model matrix to remove for object " << name << std::endl;
         }
     }
 
@@ -579,7 +530,6 @@ public:
         if (data.modelMatrices.empty())
             return;
 
-        // Reduce redundant state changes: bind once, draw many.
         glBindVertexArray(data.object.VAO);
         if (data.object.textureID != 0)
         {
@@ -597,6 +547,23 @@ public:
 
         glBindVertexArray(0);
     }
+
+
+    //destroy all gpu data
+    ~ObjectManager()
+    {
+        for (auto &pair : objects)        {
+            Object &obj = pair.second.object;
+            glDeleteVertexArrays(1, &obj.VAO);
+            glDeleteBuffers(1, &obj.VBO);
+            glDeleteBuffers(1, &obj.EBO);
+            if (obj.textureID != 0)            {
+                glDeleteTextures(1, &obj.textureID);
+            }
+        }
+    }
+
+
 };
 
 #endif

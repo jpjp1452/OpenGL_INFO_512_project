@@ -22,7 +22,6 @@
 #include "camera.h"
 #include "shader.h"
 #include "objectManager.h"
-#include "boids.h"
 #include "terrainManager.h"
 #include "alienManager.hpp"
 #include "LSystem.hpp"
@@ -54,6 +53,8 @@ const int SCREEN_HEIGHT = 1080;
 #define RotationMultiplier 2.9f * SPEED_FACTOR
 #define JUMP_VELOCITY 0.2f * SPEED_FACTOR
 #define DAMAGE_BY_ALIEN 0.21f
+#define HEALTH_SHIELD 1000.0f
+
 
 // =========================================================================
 // GLOBAL VARIABLES
@@ -312,6 +313,34 @@ void processShooting(double now, float deltaTime, terrainManager& terrain, int& 
     }
 }
 
+glm::mat4 rotateAtoB(glm::vec3 a, glm::vec3 b, glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f))
+{
+    a = glm::normalize(a);
+    b = glm::normalize(b);
+    float cosTheta = glm::dot(a, b);
+    glm::vec3 rotationAxis;
+    if (cosTheta < -0.9999f)
+    {
+        // If vectors are opposite, find an orthogonal vector for rotation axis
+        rotationAxis = glm::cross(glm::vec3(0.0f, 0.0f, 1.0f), a);
+        if (glm::length(rotationAxis) < 0.0001f) // If collinear with Z, use X axis
+            rotationAxis = glm::cross(glm::vec3(1.0f, 0.0f, 0.0f), a);
+        rotationAxis = glm::normalize(rotationAxis);
+        return glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), rotationAxis);
+    }
+    else if (cosTheta > 0.9999f)
+    {
+        // If vectors are the same, no rotation needed
+        return glm::mat4(1.0f);
+    }
+    else
+    {
+        rotationAxis = glm::cross(a, b);
+        float angle = acos(cosTheta);
+        return glm::rotate(glm::mat4(1.0f), angle, rotationAxis);
+    }
+}
+
 void updateProjectiles(double now, ObjectsData& projectileData) {
     // Projectiles Garbage Collection
     for (size_t i = 0; i < projectileEnds.size(); ) {
@@ -429,20 +458,19 @@ int main() {
 
     ShaderFilePaths shaderPaths;
     shaderPaths.addFragmentShader(PATH_TO_SHADERS "/textureLighting.frag");
-    shaderPaths.addVertexShader(PATH_TO_SHADERS "/fishTextureLighting.vert");
-    Shader textureLightingShader(shaderPaths);
+    shaderPaths.addVertexShader(PATH_TO_SHADERS "/alienTextureLighting.vert");
+    Shader alienLightMovementShader(shaderPaths);
     
-    textureLightingShader.use();
-    textureLightingShader.setFloat("shininess", 64.0f);
-    textureLightingShader.setFloat("light.ambient_strength", 0.25f);
-    textureLightingShader.setFloat("light.diffuse_strength", 1.2f);
-    textureLightingShader.setFloat("light.specular_strength", 0.35f);
-    textureLightingShader.setFloat("light.constant", 1.0f);
-    textureLightingShader.setFloat("light.linear", 0.0f);
-    textureLightingShader.setFloat("light.quadratic", 0.0f);
-    textureLightingShader.setVector3f("light.light_pos", sunPosition);
+    alienLightMovementShader.use();
+    alienLightMovementShader.setFloat("shininess", 64.0f);
+    alienLightMovementShader.setFloat("light.ambient_strength", 0.25f);
+    alienLightMovementShader.setFloat("light.diffuse_strength", 1.2f);
+    alienLightMovementShader.setFloat("light.specular_strength", 0.35f);
+    alienLightMovementShader.setFloat("light.constant", 1.0f);
+    alienLightMovementShader.setFloat("light.linear", 0.0f);
+    alienLightMovementShader.setFloat("light.quadratic", 0.0f);
+    alienLightMovementShader.setVector3f("light.light_pos", sunPosition);
 
-    Shader textureShader(PATH_TO_SHADERS "/texture.vert", PATH_TO_SHADERS "/texture.frag");
     Shader crosshairShader(PATH_TO_SHADERS "/crosshair.vert", PATH_TO_SHADERS "/crosshair.frag");
 
     Shader sphereShader(PATH_TO_SHADERS "/sphere.vert", PATH_TO_SHADERS "/sphere.frag");
@@ -475,9 +503,9 @@ int main() {
 
     Shader asteroidShader(PATH_TO_SHADERS "/asteroid.vert", PATH_TO_SHADERS "/asteroid.frag");
 
-    size_t numModelsTogenerate = 1;
+    size_t numModelsTogenerate = 10;
     for (size_t i = 0; i < numModelsTogenerate; i++) {
-        objectManager.addObject("alien", PATH_TO_OBJECTS "/small_green_alien.obj", textureLightingShader);
+        objectManager.addObject("alien", PATH_TO_OBJECTS "/small_green_alien.obj", alienLightMovementShader);
     }
     ObjectsData &dataAlien = objectManager.objects.at("alien");
 
@@ -535,6 +563,8 @@ int main() {
     params.iterations = iterations;
     params.rules = rules;
     params.inputString = input;
+    params.leafStartFactor = 0.5f;
+    params.amplificator = 4.5f;
 
     ProceduralObject proceduralObject(params, proceduralShader, barkTexture, leafTexture);
 
@@ -670,7 +700,7 @@ int main() {
     hudShaderPaths.addFragmentShader(PATH_TO_SHADERS "/hud.frag");
     Shader hudShader(hudShaderPaths);
     hudShader.use();
-    objectManager.addObject("hud", PATH_TO_OBJECTS "/weapon_quad.obj", hudShader);
+    objectManager.addObject("hud", PATH_TO_OBJECTS "/quad_model.obj", hudShader);
     
     glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 inverseModel = glm::transpose(glm::inverse(model));
@@ -701,10 +731,10 @@ int main() {
     double now = lastTime;
 
 
-    float healthReflectiveSphere = 100.0f;
-    float maxHealthReflectiveSphere = 100.0f;
+    float healthReflectiveSphere = HEALTH_SHIELD;
+    float maxHealthReflectiveSphere = HEALTH_SHIELD;
     Shader healthBarSphereShader(PATH_TO_SHADERS "/healthBarHud.vert", PATH_TO_SHADERS "/healthBarHud.frag");
-    objectManager.addObject("healthBarHud", PATH_TO_OBJECTS "/weapon_quad.obj", healthBarSphereShader);
+    objectManager.addObject("healthBarHud", PATH_TO_OBJECTS "/quad_model.obj", healthBarSphereShader);
 
 
 
@@ -738,7 +768,6 @@ int main() {
         // Render Terrain
         terrain.addImpact(impactRings, (float)now);
         terrain.draw(view, projection, camera.Position, sunPosition);
-
         
         // Draw Aliens
         uniformSetters setters;
@@ -748,7 +777,6 @@ int main() {
         setters.setVec3.push_back({"u_view_pos", camera.Position});
         objectManager.drawObject("alien", setters);
 
-
         uniformSetters proceduralSetters;
         proceduralSetters.setMat4.push_back({"V", view});
         proceduralSetters.setMat4.push_back({"P", projection});
@@ -756,8 +784,6 @@ int main() {
         //scale up the procedural model
         proceduralModel = glm::scale(proceduralModel, glm::vec3(0.5f, 0.5f, 0.5f));
         proceduralSetters.setMat4.push_back({"M", proceduralModel});
-        proceduralSetters.setFloats.push_back({"leafStartFactor", 0.5f});
-        proceduralSetters.setFloats.push_back({"leafAmplification", 4.5f});
         proceduralObject.draw(proceduralSetters);
 
         // Draw Sun
@@ -850,17 +876,18 @@ int main() {
         reflectiveSetters.setVec3.push_back({ "light.light_pos", deltaReflec });
         
         float distanceReflecSphere = glm::length(camera.Position);
-        
-        
-        
-        if(distanceReflecSphere < radiusReflective) {
-            glDisable(GL_CULL_FACE);
+        if (healthReflectiveSphere > 0.0f)
+        {
+            if (distanceReflecSphere < radiusReflective)
+            {
+                glDisable(GL_CULL_FACE);
+            }
+            objectManager.drawObject("reflectiveSphere", reflectiveSetters);
+            if (distanceReflecSphere < radiusReflective)
+            {
+                glEnable(GL_CULL_FACE);
+            }
         }
-        objectManager.drawObject("reflectiveSphere", reflectiveSetters);
-        if(distanceReflecSphere < radiusReflective) {
-            glEnable(GL_CULL_FACE);
-        }
-
         // --- RENDERING UI & HUD ---
         glDisable(GL_DEPTH_TEST);
         glLineWidth(2.0f);
@@ -874,6 +901,7 @@ int main() {
         uniformSetters healthBarSetters;
         healthBarSetters.setFloats.push_back({"healthPercent", healthReflectiveSphere / maxHealthReflectiveSphere});
         objectManager.drawObject("healthBarHud", healthBarSetters);
+
         uniformSetters hudSetters;
         hudSetters.setIntegers.push_back({"weaponFrame", weaponAnimFrame});
         objectManager.drawObject("hud", hudSetters);

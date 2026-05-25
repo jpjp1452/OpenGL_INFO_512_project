@@ -13,7 +13,7 @@
 #ifndef PATH_TO_SHADERS
 #define PATH_TO_SHADERS "shaders"
 #endif
-
+// slightly modified version of the shader class used in the exercices, with support for geometry and tessellation shaders
 
 std::string readFile(const char* filePath) {
     std::ifstream file;

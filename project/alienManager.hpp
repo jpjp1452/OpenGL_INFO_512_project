@@ -17,43 +17,17 @@
 #define ADDITIONAL_SCALE 5.0f
 #define MIN_DISTANCE_FROM_SPHERE 20.0f
 #define ADDITIONAL_DISTANCE 10.0f
-#define SPEED 20.5f
-#define DIFFICULTY_FACTOR 1.01f
-#define DIFFICULTY_INCREMENT 0.05f
+#define SPEED 5.0f
+#define DIFFICULTY_FACTOR 1.00f
+#define DIFFICULTY_INCREMENT 0.0125f
 #define DAMAGE_FROM_PROJECTILE 60.1f
-#define MAX_ADDITIONAL_DISTANCE 50.0f
+#define MAX_ADDITIONAL_DISTANCE 300.0f
 
 #ifndef PATH_TO_SHADERS
 #define PATH_TO_SHADERS "shaders"
 #endif
 
-glm::mat4 rotateAtoB(glm::vec3 a, glm::vec3 b, glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f))
-{
-    a = glm::normalize(a);
-    b = glm::normalize(b);
-    float cosTheta = glm::dot(a, b);
-    glm::vec3 rotationAxis;
-    if (cosTheta < -0.9999f)
-    {
-        // If vectors are opposite, find an orthogonal vector for rotation axis
-        rotationAxis = glm::cross(glm::vec3(0.0f, 0.0f, 1.0f), a);
-        if (glm::length(rotationAxis) < 0.0001f) // If collinear with Z, use X axis
-            rotationAxis = glm::cross(glm::vec3(1.0f, 0.0f, 0.0f), a);
-        rotationAxis = glm::normalize(rotationAxis);
-        return glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), rotationAxis);
-    }
-    else if (cosTheta > 0.9999f)
-    {
-        // If vectors are the same, no rotation needed
-        return glm::mat4(1.0f);
-    }
-    else
-    {
-        rotationAxis = glm::cross(a, b);
-        float angle = acos(cosTheta);
-        return glm::rotate(glm::mat4(1.0f), angle, rotationAxis);
-    }
-}
+
 
 struct AlienInfo
 {
@@ -97,10 +71,9 @@ public:
         info.alienPosition = glm::vec3(x, y, z);
         float scale = ((rand() / (float)RAND_MAX)) * ADDITIONAL_SCALE + MIN_SCALE;
         info.alienScale = glm::vec3(scale);
-        info.health = BASE_HEALTH * scale * difficultyLevel * DIFFICULTY_FACTOR;
-        info.maxHealth = BASE_HEALTH * scale * difficultyLevel * DIFFICULTY_FACTOR;
+        info.health = BASE_HEALTH * scale  * DIFFICULTY_FACTOR;
+        info.maxHealth = info.health;
         info.speed = SPEED * difficultyLevel * DIFFICULTY_FACTOR;
-        std::cout << "SPEED: " << info.speed << std::endl;
         return info;
     }
 
@@ -108,7 +81,7 @@ public:
     {
 
         difficultyLevel = 1.0f;
-
+        //finding bounding box of the model , to know where the head and feet are compared to the center of the model
         float minx = std::numeric_limits<float>::max();
         float maxx = std::numeric_limits<float>::lowest();
         float minz = std::numeric_limits<float>::max();
@@ -146,7 +119,7 @@ public:
         updatePosition(0.0f);
 
         shaderHealthBar = Shader(PATH_TO_SHADERS "/healthBar.vert", PATH_TO_SHADERS "/healthBar.frag");
-
+        //init health bar buffers
         float quadVertices[] = {
             // positions
             -1.0f, -1.0f, 0.0f, // bottom left
@@ -185,6 +158,7 @@ public:
                 direction = glm::normalize(direction);
                 alienInfos[i].alienPosition += direction * alienInfos[i].speed * deltaTime;
                 alienInfos[i].alienPosition.y = terrain.terrainHeightAt(alienInfos[i].alienPosition) + offsetY * alienInfos[i].alienScale.y; // keep alien above terrain
+                //rotate alien to face the center
                 glm::vec3 toCenter = glm::normalize(-alienInfos[i].alienPosition);
                 float angleY = atan2(toCenter.x, toCenter.z) - glm::radians(90.0f);
                 model = glm::translate(model, alienInfos[i].alienPosition);
@@ -210,11 +184,9 @@ public:
                 glm::vec3 end = projectileEnds[j];
                 glm::vec3 dir = end - start;
                 float segLen2 = glm::dot(dir, dir);
-                if (segLen2 == 0.0f)
-                    continue; // degenerate segment
                 glm::vec3 dirN = glm::normalize(dir);
                 glm::vec3 toAlien = alienInfos[i].alienPosition - start;
-                // projection length along the segment (clamped to segment)
+                //project the point on to the segment, then check if it is inside the alien bounding box
                 float projectionLength = glm::dot(toAlien, dirN);
                 projectionLength = glm::clamp(projectionLength, 0.0f, glm::length(dir));
                 glm::vec3 projectedPoint = start + projectionLength * dirN;
@@ -230,11 +202,7 @@ public:
                     float horizontalDistance = sqrt(distanceToAlienX * distanceToAlienX + distanceToAlienZ * distanceToAlienZ);
                     if (horizontalDistance < radiusAlien * alienInfos[i].alienScale.x)
                     {
-                        std::cout << "BEFORE Alien " << i << " hit! Health: " << alienInfos[i].health << std::endl;
-                        std::cout << "BEFORE Alien " << i << " hit! Health: " << alienInfos[i].health << std::endl;
                         alienInfos[i].health -= DAMAGE_FROM_PROJECTILE;
-                        std::cout << "Alien " << i << " hit! Health: " << alienInfos[i].health << std::endl;
-                        std::cout << "Alien " << i << " hit! Health: " << alienInfos[i].health << std::endl;
                         if (alienInfos[i].health < 0.0f)
                         {
                             difficultyLevel += DIFFICULTY_INCREMENT;
@@ -277,5 +245,11 @@ public:
             shaderHealthBar.setFloat("healthPercent", alienInfos[i].health / alienInfos[i].maxHealth);
             glDrawArrays(GL_TRIANGLES, 0, 6);
         }
+    }
+
+    ~AlienManager()
+    {
+        glDeleteVertexArrays(1, &healthBarVAO);
+        glDeleteBuffers(1, &healthBarVBO);
     }
 };

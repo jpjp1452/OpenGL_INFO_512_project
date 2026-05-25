@@ -151,9 +151,6 @@ private:
 
     // --- Sampling ---
     float sampleHeightmap(int chunkX, int chunkY, int indexX, int indexY);
-
-    // --- Utilities ---
-    float home_made_perlin(float x, float y);
 };
 
 // =========================================================================
@@ -161,7 +158,7 @@ private:
 // =========================================================================
 
 inline terrainManager::terrainManager(std::string terrainShaderPrefix) {
-    // initialisation en étapes claires
+    // initialisation en ï¿½tapes claires
     initShader(terrainShaderPrefix);
     initBuffers();
     initTerrainTextures();
@@ -239,8 +236,6 @@ inline void terrainManager::uploadHeightmapTexture(int i, int j) {
 }
 
 inline void terrainManager::loadSoilTextures() {
-    std::cout << "going to load brick" << std::endl;
-    // color texture
     glGenTextures(1, &terrainTextureID);
     glBindTexture(GL_TEXTURE_2D, terrainTextureID);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -263,8 +258,7 @@ inline void terrainManager::loadSoilTextures() {
             << " reason: " << (stbi_failure_reason() ? stbi_failure_reason() : "unknown") << std::endl;
     }
 
-    // bump map
-    std::cout << "going to load terrain bump" << std::endl;
+    // heightmap 
     glGenTextures(1, &terrainBumpTextureID);
     glBindTexture(GL_TEXTURE_2D, terrainBumpTextureID);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -283,15 +277,11 @@ inline void terrainManager::loadSoilTextures() {
         std::cerr << "Failed to load texture: " << PATH_TO_TEXTURE << SOIL_BUMP_TEXTURE
             << " reason: " << (stbi_failure_reason() ? stbi_failure_reason() : "unknown") << std::endl;
     }
-
-    std::cout << "Texture loaded: procedural_perlin_noise (" << TERRAIN_RESOLUTION << "x" << TERRAIN_RESOLUTION << ")" << std::endl;
 }
 
 inline void terrainManager::generate_terrain_heightmap(int chunk_x, int chunk_y, unsigned char* data) {
     const float maxDistanceSquarred = (TERRAIN_FLAT_ZONE_SIZE * TERRAIN_FLAT_ZONE_SIZE);
     const float transitionDistanceSquarred = maxDistanceSquarred * TERRAIN_TRANSITION_SIZE;
-
-    std::cout << "Generating heightmap for chunk (" << chunk_x << ", " << chunk_y << ")" << std::endl;
     for (int y = 0; y < TERRAIN_RESOLUTION; y++) {
         int y_local = y;
         int chunk_y_local = chunk_y;
@@ -335,8 +325,6 @@ inline void terrainManager::generate_terrain_heightmap(int chunk_x, int chunk_y,
 inline void terrainManager::moveChunkDown(bool moveDown) {
     unsigned char* tmpTerrain = nullptr;
     GLuint tmpTextureID = 0;
-    std::cout << "move Down: " << moveDown << std::endl;
-
     if (moveDown) {
         for (int j = 0; j < 3; j++) {
             tmpTerrain = currentTerrainData[2][j];
@@ -351,7 +339,6 @@ inline void terrainManager::moveChunkDown(bool moveDown) {
             int newChunkY = currentChunkY - 1;
             int newChunkX = currentChunkX - 1 + j;
 
-            std::cout << "new chunk: (" << newChunkY << ", " << newChunkX << ")" << std::endl;
             generate_terrain_heightmap(newChunkX, newChunkY, tmpTerrain);
             chunkOffsets[0][j] = { newChunkX, newChunkY };
             currentTerrainData[0][j] = tmpTerrain;
@@ -374,7 +361,6 @@ inline void terrainManager::moveChunkDown(bool moveDown) {
             int newChunkX = currentChunkX - 1 + j;
             int newChunkY = currentChunkY + 1;
 
-            std::cout << "new chunk: (" << newChunkY << ", " << newChunkX << ")" << std::endl;
             generate_terrain_heightmap(newChunkX, newChunkY, tmpTerrain);
 
             chunkOffsets[2][j] = { newChunkX, newChunkY };
@@ -389,7 +375,6 @@ inline void terrainManager::moveChunkDown(bool moveDown) {
 inline void terrainManager::moveChunkRight(bool moveRight) {
     unsigned char* tmpTerrain = nullptr;
     GLuint tmpTextureID = 0;
-    std::cout << "move Right: " << moveRight << std::endl;
 
     if (moveRight) {
         for (int i = 0; i < 3; i++) {
@@ -405,7 +390,6 @@ inline void terrainManager::moveChunkRight(bool moveRight) {
             int newChunkX = currentChunkX - 1;
             int newChunkY = currentChunkY - 1 + i;
 
-            std::cout << "new chunk: (" << newChunkY << ", " << newChunkX << ")" << std::endl;
             generate_terrain_heightmap(newChunkX, newChunkY, tmpTerrain);
             chunkOffsets[i][0] = { newChunkX, newChunkY };
             currentTerrainData[i][0] = tmpTerrain;
@@ -429,7 +413,6 @@ inline void terrainManager::moveChunkRight(bool moveRight) {
             int newChunkX = currentChunkX + 1;
             int newChunkY = currentChunkY - 1 + i;
 
-            std::cout << "new chunk: (" << newChunkY << ", " << newChunkX << ")" << std::endl;
             generate_terrain_heightmap(newChunkX, newChunkY, tmpTerrain);
             chunkOffsets[i][2] = { newChunkX, newChunkY };
             currentTerrainData[i][2] = tmpTerrain;
@@ -617,11 +600,6 @@ inline void terrainManager::saveHeightmapToPNG(const std::string& filename) {
     stbi_write_png(filename.c_str(), bigWidth, bigHeight, 3, grayData.data(), bigWidth * 3);
 }
 
-inline float terrainManager::home_made_perlin(float x, float y) {
-    float value = std::sin(x * 0.1f) * 10 + std::cos(y * 0.1f) * 40;
-    value = (value * value) * std::tanh(value * 0.1f);
-    return std::sin(value + x + y);
-}
 
 inline void terrainManager::printChunkOffsets() {
     std::cout << "Chunk Offsets:" << std::endl;

@@ -9,7 +9,6 @@ add_executable(OpenGLProject
                main.cpp 
                camera.h 
                shader.h 
-               boids.h 
                objectManager.h 
                objectTexture.h )
 

@@ -66,16 +66,14 @@ void main()
     color = mix(color, snow,         w5);
     */
     
-    // Texture atlas blend: smoothly transition from left half to right half by height.
     vec2 uvBase = frag_in.texCoord ;
     vec2 uvLow = uvBase;
 
     vec3 color = texture(textureBrickColor, uvLow).rgb;
 
-    // Blend bump gradients from both atlas regions for a smooth normal transition.
     vec2 delta = 1.0 / vec2(textureSize(textureBrickBump, 0));
 
-    float bumpScale = 0.05; // Adjust for stronger/weaker bump effect
+    float bumpScale = 0.05; 
     float lowL = texture(textureBrickBump, uvLow - vec2(delta.x, 0.0)).r*bumpScale;
     float lowR = texture(textureBrickBump, uvLow + vec2(delta.x, 0.0)).r*bumpScale;
     float lowD = texture(textureBrickBump, uvLow - vec2(0.0, delta.y)).r*bumpScale;

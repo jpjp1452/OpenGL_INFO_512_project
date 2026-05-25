@@ -23,6 +23,6 @@ void main()
     vs_out.factor    = inFactor;
     vs_out.prevFactor = inPrevFactor;
 
-    // dummy position
+    // the vertex shader is only responsible for passing data to the geometry shader
     gl_Position = vec4(inStart, 1.0);
 }

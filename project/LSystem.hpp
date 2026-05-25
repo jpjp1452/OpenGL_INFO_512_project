@@ -45,8 +45,11 @@ struct ProceduralParameters
     RotationXYZ angles;
     GrowingFactors growingFactors;
     DecreasingFactors decreaseFactors;
+    float leafStartFactor;
+    float amplificator;
 };
 
+// find from in input and replace it by to
 void replace(std::string &input, const std::string &from, const std::string &to)
 {
     if (from.empty())
@@ -64,6 +67,7 @@ void replace(std::string &input, const std::string &from, const std::string &to)
     }
 }
 
+// apply the rules to the input string for a given number of iterations, then replace all non-terminal characters by 'F' and return the final string
 std::string applyRules(std::string inputString, const std::vector<Rule> &rules, size_t iterations)
 {
     std::string currentString = inputString;
@@ -92,14 +96,12 @@ std::string applyRules(std::string inputString, const std::vector<Rule> &rules, 
 
 struct Segment
 {
-    glm::vec3 prevStart;
-    glm::vec3 start;
-    glm::vec3 end;
-    float factor;
-    float prevFactor;
+    glm::vec3 prevStart; // the start of the previous segment
+    glm::vec3 start;   // the start of the segment
+    glm::vec3 end;     // the end of the segment
+    float factor;       // the factor to apply to radius when converting to a cylinder
+    float prevFactor;   // the factor of the previous segment, used to have smoother transition between segments of different factors
 };
-
-
 
 // + - rotation towards x axis
 // * / rotation towards y axis
@@ -119,12 +121,9 @@ void rotateDirectionToZ(glm::vec3 &direction, float angle)
 
 
 
-
-
-
-
-
-size_t convertToSegmentsHelper(const std::string &lSystemString, std::vector<Segment> &segments,GrowingFactors& growingFactors,DecreasingFactors& decreaseFactor,RotationXYZ& angles, size_t startAt, float factor, Segment branchingSegment, glm::vec3 currentDirection)
+// recursive function to simulate stack behavior of brackets, returns the index of next index to read after
+//add segment to segments vector when reading F, and update the current direction when reading + - * / ^ &, when reading [ call recursively and update the current direction and branching segment, when reading ] return
+size_t convertToSegmentsHelper(const std::string &lSystemString, std::vector<Segment> &segments, GrowingFactors &growingFactors, DecreasingFactors &decreaseFactor, RotationXYZ &angles, size_t startAt, float factor, Segment branchingSegment, glm::vec3 currentDirection)
 {
     float currentFactor = factor;
     for (size_t i = startAt; i < lSystemString.length(); i++)
@@ -137,7 +136,7 @@ size_t convertToSegmentsHelper(const std::string &lSystemString, std::vector<Seg
             newSegment.start = branchingSegment.end;
 
             glm::vec3 growth(currentDirection.x * growingFactors.x, currentDirection.y * growingFactors.y, currentDirection.z * growingFactors.z);
-            //growth *= currentFactor;
+            // growth *= currentFactor;
             newSegment.end = branchingSegment.end + growth;
             newSegment.prevFactor = branchingSegment.factor;
             currentFactor *= decreaseFactor.growing;
@@ -172,7 +171,7 @@ size_t convertToSegmentsHelper(const std::string &lSystemString, std::vector<Seg
         else if (c == '[')
         {
             size_t newStartAt = i + 1;
-            i = convertToSegmentsHelper(lSystemString, segments, growingFactors, decreaseFactor, angles, newStartAt, currentFactor*decreaseFactor.branching, branchingSegment, currentDirection);
+            i = convertToSegmentsHelper(lSystemString, segments, growingFactors, decreaseFactor, angles, newStartAt, currentFactor * decreaseFactor.branching, branchingSegment, currentDirection);
         }
         else if (c == ']')
         {
@@ -182,7 +181,9 @@ size_t convertToSegmentsHelper(const std::string &lSystemString, std::vector<Seg
     return lSystemString.length() - 1;
 }
 
-std::vector<Segment> convertToSegments(const std::string &lSystemString, DecreasingFactors& decreaseFactor, RotationXYZ& angles, GrowingFactors& growingFactors)
+
+// start from the base segment and apply the rules to convert the final string into segments, then return the vector of segments
+std::vector<Segment> convertToSegments(const std::string &lSystemString, DecreasingFactors &decreaseFactor, RotationXYZ &angles, GrowingFactors &growingFactors)
 {
     int openBrackets = 0;
     std::vector<Segment> segments;
@@ -192,7 +193,7 @@ std::vector<Segment> convertToSegments(const std::string &lSystemString, Decreas
     baseSegment.end = glm::vec3(0.0f, 0.0f, 0.0f);
     baseSegment.factor = 1.0f;
     baseSegment.prevFactor = 1.0f;
-    convertToSegmentsHelper(lSystemString, segments, growingFactors, decreaseFactor, angles, 0,1.0f,baseSegment, glm::vec3(0.0f, 1.0f, 0.0f));
+    convertToSegmentsHelper(lSystemString, segments, growingFactors, decreaseFactor, angles, 0, 1.0f, baseSegment, glm::vec3(0.0f, 1.0f, 0.0f));
     return segments;
 }
 
@@ -202,17 +203,19 @@ public:
     std::vector<Segment> segments;
     GLuint VAO, VBO;
     GLuint textureID1, textureID2;
-    Shader& shader;
+    Shader &shader;
+    float leafStartFactor;
+    float amplificator;
 
-    ProceduralObject(ProceduralParameters params, Shader& shaderPath,std::string tex1, std::string tex2): shader(shaderPath), textureID1(0), textureID2(0)
+    ProceduralObject(ProceduralParameters params, Shader &shaderPath, std::string tex1, std::string tex2) : shader(shaderPath), textureID1(0), textureID2(0)
     {
+
+        leafStartFactor = params.leafStartFactor;
+        amplificator = params.amplificator;
+
         std::string output = applyRules(params.inputString, params.rules, params.iterations);
         segments = convertToSegments(output, params.decreaseFactors, params.angles, params.growingFactors);
         std::cout << "ProceduralObject initialized with " << segments.size() << " segments." << std::endl;
-        if (segments.size() > 0) {
-            std::cout << "Segment 0 start: " << segments[0].start.x << "," << segments[0].start.y << "," << segments[0].start.z << std::endl;
-            std::cout << "Segment 0 end: " << segments[0].end.x << "," << segments[0].end.y << "," << segments[0].end.z << std::endl;
-        }
 
         // Create VAO and VBO for each segment
 
@@ -224,41 +227,47 @@ public:
         glBufferData(GL_ARRAY_BUFFER, sizeof(Segment) * segments.size(), segments.data(), GL_STATIC_DRAW);
 
         auto att_pos = glGetAttribLocation(shader.ID, "inPrevStart");
-        if (att_pos != -1) {
+        if (att_pos != -1)
+        {
             glEnableVertexAttribArray(att_pos);
             glVertexAttribPointer(att_pos, 3, GL_FLOAT, GL_FALSE, sizeof(Segment), (void *)offsetof(Segment, prevStart));
         }
         auto att_start = glGetAttribLocation(shader.ID, "inStart");
-        if (att_start != -1) {
+        if (att_start != -1)
+        {
             glEnableVertexAttribArray(att_start);
             glVertexAttribPointer(att_start, 3, GL_FLOAT, GL_FALSE, sizeof(Segment), (void *)offsetof(Segment, start));
         }
         auto att_end = glGetAttribLocation(shader.ID, "inEnd");
-        if (att_end != -1) {
+        if (att_end != -1)
+        {
             glEnableVertexAttribArray(att_end);
             glVertexAttribPointer(att_end, 3, GL_FLOAT, GL_FALSE, sizeof(Segment), (void *)offsetof(Segment, end));
         }
         auto att_factor = glGetAttribLocation(shader.ID, "inFactor");
-        if (att_factor != -1) {
+        if (att_factor != -1)
+        {
             glEnableVertexAttribArray(att_factor);
             glVertexAttribPointer(att_factor, 1, GL_FLOAT, GL_FALSE, sizeof(Segment), (void *)offsetof(Segment, factor));
         }
         auto att_prevFactor = glGetAttribLocation(shader.ID, "inPrevFactor");
-        if (att_prevFactor != -1) {
+        if (att_prevFactor != -1)
+        {
             glEnableVertexAttribArray(att_prevFactor);
             glVertexAttribPointer(att_prevFactor, 1, GL_FLOAT, GL_FALSE, sizeof(Segment), (void *)offsetof(Segment, prevFactor));
-        }   
+        }
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
-
         // Load textures 1 and 2
         unsigned int width, height;
-        unsigned char* data;
-        if (!tex1.empty()) {
-            data = stbi_load(tex1.c_str(), (int*)&width, (int*)&height, 0, 3);
-            if (data) {
+        unsigned char *data;
+        if (!tex1.empty())
+        {
+            data = stbi_load(tex1.c_str(), (int *)&width, (int *)&height, 0, 3);
+            if (data)
+            {
                 glGenTextures(1, &textureID1);
                 glBindTexture(GL_TEXTURE_2D, textureID1);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -269,13 +278,16 @@ public:
                 glGenerateMipmap(GL_TEXTURE_2D);
                 stbi_image_free(data);
             }
-            else {
+            else
+            {
                 std::cout << "Failed to load texture: " << tex1 << std::endl;
             }
         }
-        if (!tex2.empty()) {
-            data = stbi_load(tex2.c_str(), (int*)&width, (int*)&height, 0, 3);
-            if (data) {
+        if (!tex2.empty())
+        {
+            data = stbi_load(tex2.c_str(), (int *)&width, (int *)&height, 0, 3);
+            if (data)
+            {
                 glGenTextures(1, &textureID2);
                 glBindTexture(GL_TEXTURE_2D, textureID2);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -286,15 +298,11 @@ public:
                 glGenerateMipmap(GL_TEXTURE_2D);
                 stbi_image_free(data);
             }
-            else {
+            else
+            {
                 std::cout << "Failed to load texture: " << tex2 << std::endl;
             }
         }
-            
-
-
-
-
     }
     void draw(uniformSetters setters)
     {
@@ -316,6 +324,9 @@ public:
             shader.setMatrix4(setter.first.c_str(), setter.second);
         }
 
+        shader.setFloat("leafStartFactor", leafStartFactor);
+        shader.setFloat("leafAmplification", amplificator);
+
         shader.setInteger("texture1", 0);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, textureID1);
@@ -330,7 +341,18 @@ public:
         glBindTexture(GL_TEXTURE_2D, 0);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, 0);
+    }
 
-
+    //destructor to delete the VAO, VBO and textures
+    ~ProceduralObject()
+    {
+        glDeleteVertexArrays(1, &VAO);
+        glDeleteBuffers(1, &VBO);
+        if (textureID1 != 0)        {
+            glDeleteTextures(1, &textureID1);
+        }
+        if (textureID2 != 0)        {
+            glDeleteTextures(1, &textureID2);
+        }
     }
 };

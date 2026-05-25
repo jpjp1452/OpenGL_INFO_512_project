@@ -26,40 +26,27 @@ void main(){
 
     abs_z = abs(pivot - pos.x);
     moves = 0.0;
-
-
-
-        if (pos.z > 0.0)
-        {
-            moves = 1.0;
-        }
-        else
-        {
-            moves = -1.0;
-        }
-    
-
-
-
+    if (pos.z > 0.0)
+    {
+        moves = 1.0;
+    }
+    else
+    {
+        moves = -1.0;
+    }
     if(pos.y < -0.25)
     {   
- 
-            if (abs(pos.z) <0.13 || pos.y < -0.4)
-            {
-                abs_z = abs(pos.y - -0.25);
-                pos.x += (sin( time * frequency) * amplitude)* (abs_z)*moves;
-            }
+        if (abs(pos.z) <0.13 || pos.y < -0.4)
+        {
+            abs_z = abs(pos.y - -0.25);
+            pos.x += (sin( time * frequency) * amplitude)* (abs_z)*moves;
+        }
     }
-    
-
-
-
 
     vec4 frag_coord = M*pos;
     gl_Position = P*V*frag_coord; 
     v_normal = vec3(itM * vec4(normal, 0.0)); 
     v_frag_coord = frag_coord.xyz; 
     v_uv = tex_coord; 
-
     
 }

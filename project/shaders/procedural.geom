@@ -33,16 +33,12 @@ void emitVertex(vec3 p, float colorFactor, vec2 uv)
         M *
         vec4(p, 1.0);
 
-
-
     vec4 brownColor = vec4(0.55, 0.27, 0.07, 1.0);
     vec4 greenColor = vec4(0.0, 0.5, 0.0, 1.0);
 
     vec4 finalColor = mix( greenColor,brownColor, colorFactor);
-
     fragColor = vec3(finalColor.r, finalColor.g, finalColor.b);
-    factor = gs_in[0].factor;
-
+    factor = gs_in[0].factor; // Pass the factor to the fragment shader for leaf or branch texture
     v_uv = uv;
     EmitVertex();
 }
@@ -53,8 +49,8 @@ void main()
     vec3 A = gs_in[0].start;
     vec3 B = gs_in[0].end;
 
-    float radiusA = 1.1*gs_in[0].prevFactor;
-    float radiusB = 1.1*gs_in[0].factor;
+    float radiusA = 1.1*gs_in[0].prevFactor; //radius previous branch
+    float radiusB = 1.1*gs_in[0].factor; //radius current branch
 
     vec3 dir = normalize(B - A);
 
@@ -89,7 +85,7 @@ void main()
             2.0 * 3.141592 *
             float(i) /
             float(SIDES);
-
+        //offset to  be on the perimeter of the circle
         vec3 offsetA =
             rightPrev * cos(angle) * radiusA +
             upPrev    * sin(angle) * radiusA;
@@ -98,16 +94,18 @@ void main()
             right * cos(angle) * radiusB +
             up    * sin(angle) * radiusB;
         float smallerFactor = 0.6;
+        //effect on leaf size
         float amplificationA = (gs_in[0].prevFactor/leafStartFactor)+leafAmplification;
         float amplificationB = (gs_in[0].factor/leafStartFactor)+leafAmplification;
         vec2 uvA = vec2(u, 0.0);
         vec2 uvB = vec2(u, 1.0);
+
+        //if leaf apply deformation to make it look more like a flat ellipsoid
         if (gs_in[0].prevFactor < leafStartFactor)
         {
             offsetA = rightPrev * cos(angle) * radiusA * amplificationA + upPrev * sin(angle) *radiusA / amplificationA;
             uvA = vec2(u/amplificationA, 0.0);
         }
-        
         if (gs_in[0].factor < leafStartFactor)
         {
             offsetB = right * cos(angle) * radiusB * amplificationB + up * sin(angle) * radiusB/ amplificationB;
