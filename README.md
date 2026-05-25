@@ -38,7 +38,6 @@ All dependencies are located in the `../3rdParty/` directory relative to this pr
 # Building
 
 ```bash
-cd project
 mkdir build
 cd build
 cmake ..
@@ -48,7 +47,7 @@ make
 ## Launch
 
 ```bash
-cd build
+cd build/project
 ./OpenGLProject
 ```
 
